@@ -253,7 +253,11 @@ def make_client(settings: Settings) -> Any:
 
 
 def ensure_indices(store: ElasticStore) -> list[str]:
-    """Create any missing index with its strict mapping. Returns the names created."""
+    """Create any missing index with its strict mapping. For an index that already exists, add any new fields
+    the mapping has grown since it was created - `dynamic: strict` rejects unmapped fields outright, so a field
+    added to the Python source without this step passing would only surface as a write failure in production.
+    Returns the names created (not the ones just patched with new fields).
+    """
     wanted = {
         esq.HITS_INDEX: esq.hits_index_body(),
         esq.EVIDENCE_INDEX: esq.evidence_index_body(store.settings.embed_inference_id if store.semantic else None),
@@ -261,7 +265,9 @@ def ensure_indices(store: ElasticStore) -> list[str]:
     }
     created = []
     for name, body in wanted.items():
-        if not store.es.indices.exists(index=name):
+        if store.es.indices.exists(index=name):
+            store.es.indices.put_mapping(index=name, properties=body["mappings"]["properties"])
+        else:
             store.es.indices.create(index=name, **body)
             created.append(name)
     return created

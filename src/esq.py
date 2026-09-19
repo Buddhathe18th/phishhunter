@@ -40,6 +40,7 @@ def hits_index_body() -> dict:
                 "page_title": {"type": "text"},
                 "has_login_form": {"type": "boolean"},
                 "page_fingerprint": {"type": "keyword"},
+                "domain_age_days": {"type": "float"},
             },
         },
     }
