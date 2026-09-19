@@ -7,6 +7,7 @@ available and the source of the signals that the action policy trusts (it never 
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 
@@ -29,6 +30,8 @@ ANALYST_PROMPT = (
 
 PLAN = {"suspicious": ["notify"], "likely": ["notify", "block_domain"],
         "confirmed": ["notify", "block_domain", "file_report"]}
+
+GEMINI_MIN_INTERVAL = 15.0  # seconds; keeps a fast demo-mode loop from burning through a free quota
 
 
 @dataclass
@@ -71,6 +74,7 @@ class Investigator:
     def __init__(self, store: Store, engine: ActionEngine, settings: Settings, kibana: Kibana | None = None,
                  fetch: Callable[[str], Awaitable[PageFacts]] = fetch_page) -> None:
         self.store, self.engine, self.settings, self.kibana, self.fetch = store, engine, settings, kibana, fetch
+        self._last_gemini_call = 0.0
 
     # --- signals the policy trusts (recomputed from data, never from model output) ---------------------
     def signals_for(self, domain: str) -> Signals | None:
@@ -202,7 +206,16 @@ class Investigator:
     async def _ask_gemini(self, domain: str, inv: Investigation, tool: Callable[[str, str], None]) -> str | None:
         """One grounded completion over already-retrieved evidence. No tool-calling loop: the evidence is fixed
         up front from `inv`, so there is nothing for a poisoned lure to redirect mid-conversation.
+
+        Rate-limited application-wide (not per-domain): demo mode can flag many domains within seconds, and a
+        free-tier quota does not survive that kind of burst.
         """
+        now = time.monotonic()
+        if now - self._last_gemini_call < GEMINI_MIN_INTERVAL:
+            tool("gemini_analyst", "skipped (rate-limited to protect the free quota)")
+            return None
+        self._last_gemini_call = now
+
         lure_lines = "\n".join(f"- [{lure['language'] or '?'}] {lure['snippet']}" for lure in inv.lures[:3]) or "none found"
         context = (
             f"Domain: {domain}\nBrand impersonated: {inv.brand or 'unknown'}\nLookalike score: {inv.score}/100\n"

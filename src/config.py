@@ -81,7 +81,7 @@ class Settings:
     outbox_dir: str = "outbox"
     # --- optional integrations (all no-ops when unset) ---
     gemini_api_key: str | None = field(default=None, repr=False)
-    gemini_model: str = "gemini-3.6-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
     sentry_dsn: str | None = field(default=None, repr=False)
 
 
@@ -123,6 +123,6 @@ def load() -> Settings:
         webhook_url=_url("ACTION_WEBHOOK_URL"),
         outbox_dir=os.getenv("OUTBOX_DIR", "outbox"),
         gemini_api_key=_secret("GEMINI_API_KEY"),
-        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"),
         sentry_dsn=_secret("SENTRY_DSN"),
     )

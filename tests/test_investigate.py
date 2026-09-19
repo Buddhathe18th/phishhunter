@@ -119,6 +119,27 @@ def test_gemini_fallback_used_when_no_kibana(store, settings, monkeypatch):
     assert any(t["tool"] == "gemini_analyst" for t in inv.trace)
 
 
+def test_gemini_rate_limited_on_rapid_repeat_calls(store, settings, monkeypatch):
+    """A fast demo loop flagging many domains must not burn through a free quota calling Gemini every time."""
+    add_hit(store, BAD)
+    add_hit(store, "rbc-signin-secure.online")
+    _, investigator = make_engine(store, settings, gemini_api_key="test-key")
+
+    calls = []
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            calls.append(1)
+            return type("Resp", (), {"text": "note"})()
+
+    monkeypatch.setattr("google.genai.Client", lambda api_key=None: type("C", (), {"models": FakeModels()})())
+    first = run(investigator.run(BAD))
+    second = run(investigator.run("rbc-signin-secure.online"))
+    assert first.agent_source == "gemini" and len(calls) == 1
+    assert second.agent_source is None and second.agent_summary is None
+    assert any("rate-limited" in t["result"] for t in second.trace if t["tool"] == "gemini_analyst")
+
+
 def test_gemini_never_called_when_kibana_succeeds(store, settings, monkeypatch):
     add_hit(store, BAD)
     engine, _ = make_engine(store, settings, gemini_api_key="test-key")

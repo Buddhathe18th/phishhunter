@@ -27,17 +27,12 @@ lures, pages, reports ─► phish-evidence ─┘   ▲                        
                                   Agent Builder agent (LLM, read-only tools)       human approves the rest
 ```
 
-The LLM agent can only propose an action. Whether it actually runs unattended comes down to fixed rules checked
-against signals recomputed from the data, not anything the agent says, so a poisoned lure or page can't talk its
-way into a takedown.
+The LLM agent can only propose an action; a deterministic policy gate decides what actually runs, never the model.
+If Agent Builder isn't available, the write-up falls back to a grounded Gemini call over evidence already gathered
+- either way it's narrative only, and the dashboard credits whichever one answered.
 
-If `KIBANA_URL` isn't set (or Agent Builder errors), the analyst write-up falls back to a direct Gemini call
-grounded only in evidence the deterministic pipeline already gathered - no tool access, so there's nothing for a
-poisoned lure to redirect. Either source is narrative only; the dashboard credits whichever one actually answered.
-
-The dashboard also clusters the last 24h of hits into campaigns (same brand, issuer and TLD), and for any domain
-with a recognised brand, suggests a handful of lookalikes nobody's registered yet - the scorer run in reverse, so a
-defender has something to pre-emptively watch instead of only ever reacting after a certificate is issued.
+The dashboard also clusters flagged domains into campaigns, and suggests lookalikes nobody's registered yet for any
+recognised brand - the scorer run in reverse, so a defender has something to watch pre-emptively.
 
 ## Quick start (no cluster needed)
 
@@ -57,23 +52,15 @@ lure corpus (`data/lures.jsonl`), so investigations work offline (lexical search
 
 ## With Elasticsearch
 
-1. Create an Elastic Cloud deployment or serverless project and an API key. For the running app use a
-   least-privilege key (read/write on `phish-*`); for the one-off setup step use one that can also manage
-   inference endpoints and Kibana tools.
+1. Create an Elastic Cloud/serverless deployment + API key (least-privilege for the app; admin for setup).
 2. Fill in `.env`: `ELASTIC_URL`, `ELASTIC_API_KEY`, optionally `KIBANA_URL` and `JINA_API_KEY`.
-3. One-time setup (idempotent):
-   ```powershell
-   python -m src.setup_elastic --seed
-   ```
-   This creates the Jina embedding and rerank inference endpoints (if `JINA_API_KEY` is set), the three indices with
-   strict mappings, loads the lure corpus, and registers the Agent Builder tools and agent.
-4. Optional, for agent-triggered proposals: import `elastic/workflows/propose_action.yaml` in Kibana → Workflows,
-   then `python -m src.setup_elastic --workflow-id <id>` to expose it to the agent as a tool.
-   `elastic/workflows/campaign_digest.yaml` is a second workflow that has the agent summarise recent campaigns.
-5. Run the app as above with `DEMO=0` for the live stream, or `DEMO=1` to replay.
+3. `python -m src.setup_elastic --seed` - idempotent, creates the Jina inference endpoints, indices, and Agent
+   Builder tools/agent.
+4. Optional: import `elastic/workflows/propose_action.yaml` in Kibana → Workflows, then
+   `python -m src.setup_elastic --workflow-id <id>` to expose it to the agent.
+5. Run with `DEMO=0` for the live stream, `DEMO=1` to replay.
 
-Without `JINA_API_KEY` everything still works with BM25-only retrieval. `SEMANTIC_SEARCH=1` reuses inference
-endpoints that already exist (for example Elastic Inference Service ones).
+No `JINA_API_KEY`? Everything still works with BM25-only retrieval.
 
 ## Autonomy and safety
 
@@ -89,22 +76,11 @@ required) serves the domains blocked by executed actions. Full threat model in [
 
 ## Measured accuracy, not just a demo
 
-`python -m scripts.benchmark` runs the scorer against a frozen snapshot of OpenPhish's public feed of live
-phishing URLs (`data/openphish_sample_2026-09-19.txt`) plus a spot-check list of known-legitimate domains, and
-`tests/test_benchmark.py` holds these as permanent regression bounds. Last run:
-
-- **100% recall** (8/8) on phishing URLs in the snapshot that target one of our configured brands. Most of the
-  snapshot targets brands we haven't configured, which is expected and by design: this is a brand-protection
-  tool, not a general-purpose phishing detector, so recall is only a meaningful number on the in-scope subset.
-- **2/21 false positives** on the known-legitimate spot-check, both the same failure mode: a domain that
-  legitimately mentions a brand by name (`netflix-inc-investor-relations.com`, a university help page that
-  happens to reference Microsoft Teams) scores high enough to flag on the brand-mention signal alone, with no
-  other risk signal present. This is exactly why every action requires a human to approve it before it runs -
-  the base signal is tuned for recall, not precision, and the policy gate is what makes that an acceptable
-  tradeoff instead of a liability. Running this benchmark is also how we found and fixed a real bug: the demo
-  brand list originally included `"waterloo"`, which is a 94%-similar fuzzy match to the unrelated, legitimately
-  distinct `waterloo.ca` (the City of Waterloo, not the university) - a good example of why short or dictionary-word
-  brand names need care in a real deployment.
+`python -m scripts.benchmark` scores a frozen snapshot of OpenPhish's live feed plus a known-legitimate spot-check;
+`tests/test_benchmark.py` locks the results in as permanent regression bounds. Last run: **100% recall** on
+in-scope phishing URLs, **2/21 false positives** on known-good domains - both from legitimate pages that merely
+mention a brand by name, which is exactly why a human approves every action instead of the policy running blind.
+Full writeup and the bug this found: [SECURITY.md](SECURITY.md#known-limitations).
 
 ## Optional integrations
 
@@ -112,7 +88,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 
 | Variable | Enables |
 |---|---|
-| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-3.6-flash`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
+| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-flash-lite-latest`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
 | `SENTRY_DSN` | Exception capture and light performance tracing for the pipeline, investigator and API (`send_default_pii=False`) |
 
 ## Layout
@@ -145,12 +121,9 @@ CI installs from the hash-pinned `requirements*.lock` files. To refresh them:
 
 ## Status
 
-Verified against a live Elasticsearch 9.5.1 node: mappings, ngram/fuzzy search, ES|QL, hybrid RRF + rerank
-retrieval (through a local stand-in for Jina), and the full investigate → propose → approve loop. Not verified:
-the Kibana Agent Builder registration and `converse` calls (no Kibana was available), the real Jina API, and the
-Gemini fallback against the live Gemini API (tested against a mocked client). See
-[SECURITY.md](SECURITY.md#known-limitations) for known limitations. The lure corpus is synthetic, and the public
-CertStream server goes down sometimes, so use `DEMO=1` if it is.
+Verified live: Elasticsearch 9.5.1 (mappings, search, ES|QL, the full investigate → propose → approve loop), the
+real Gemini API, and real Sentry event capture. Not yet verified: Kibana Agent Builder registration/`converse`
+(no Kibana available yet) and the real Jina API. Known limitations: [SECURITY.md](SECURITY.md#known-limitations).
 
 ## License
 
