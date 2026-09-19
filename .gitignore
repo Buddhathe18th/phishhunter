@@ -1,6 +1,25 @@
+# environments and secrets - never commit these
 .venv/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials*.json
+
+# generated / local state
 __pycache__/
 *.pyc
 .pytest_cache/
-.env
+.ruff_cache/
+.coverage
+htmlcov/
+outbox/
+*.log
+
+# editor
 .vscode/
+.idea/

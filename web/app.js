@@ -1,0 +1,125 @@
+"use strict";
+const $ = id => document.getElementById(id);
+const tokenStore = {
+  get: () => { try { return sessionStorage.getItem("ph_token"); } catch { return null; } },
+  set: v => { try { sessionStorage.setItem("ph_token", v); } catch { /* private mode */ } },
+  clear: () => { try { sessionStorage.removeItem("ph_token"); } catch { /* ignore */ } },
+};
+
+// Build DOM without innerHTML: every string from the server (including attacker-chosen domains and lure text)
+// only ever reaches the page through textContent, and there is no inline script or style (see the CSP).
+function h(tag, props = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") el.className = v;
+    else if (k === "on") for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
+    else el.setAttribute(k, v);
+  }
+  el.append(...kids.flat().filter(k => k !== null && k !== undefined));
+  return el;
+}
+
+let token = tokenStore.get();
+let ws;
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}), Authorization: "Bearer " + token };
+  if (opts.body) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401) { logout(); throw new Error("unauthorized"); }
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res;
+}
+
+function logout() {
+  tokenStore.clear(); token = null;
+  if (ws) ws.close();
+  $("app").hidden = true; $("login").hidden = false; $("conn").textContent = "not connected";
+}
+
+function renderHit(d, prepend = true) {
+  const el = h("div", { class: "hit" + (d.score >= 70 ? " high" : ""), on: { click: () => investigate(d.domain) } },
+    h("div", { class: "top" }, h("span", { class: "domain" }, d.domain), h("span", { class: "score" }, d.score + "/100")),
+    h("ul", { class: "reasons" }, (d.reasons || []).map(r => h("li", {}, r))));
+  const feed = $("feed");
+  if (prepend) feed.prepend(el); else feed.append(el);
+  while (feed.children.length > 60) feed.lastChild.remove();
+}
+
+function renderInvestigation(inv) {
+  const box = $("investigation");
+  box.className = "panel";
+  box.replaceChildren(
+    h("div", { class: "top" }, h("span", { class: "domain" }, inv.domain), h("span", { class: "verdict v-" + inv.verdict }, inv.verdict)),
+    h("p", {}, inv.summary),
+    inv.corroboration.length ? h("ul", { class: "reasons" }, inv.corroboration.map(c => h("li", {}, c))) : null,
+    inv.agent_summary ? h("div", { class: "lure" }, h("b", {}, "Agent Builder analyst"), h("div", {}, inv.agent_summary)) : null,
+    ...inv.lures.map(l => h("div", { class: "lure" }, h("b", {}, `[${l.language || "?"}] ${l.type || ""}`), " " + l.snippet)),
+    inv.lookalikes.length ? h("div", { class: "lure" }, h("b", {}, "Similar flagged domains: "), inv.lookalikes.map(x => x.domain).join(", ")) : null,
+    h("ol", { class: "trace" }, inv.trace.map(t => h("li", {}, h("b", {}, t.tool), " - " + t.result))),
+    h("a", { href: "#", on: { click: async e => { e.preventDefault(); const r = await api("/api/report/" + encodeURIComponent(inv.domain)); alert(await r.text()); } } }, "view abuse report"));
+}
+
+async function investigate(domain) {
+  $("investigation").textContent = "Investigating " + domain + " ...";
+  try {
+    const res = await api("/api/investigate", { method: "POST", body: JSON.stringify({ domain }) });
+    renderInvestigation(await res.json());
+    loadActions();
+  } catch (e) { $("investigation").textContent = "Investigation failed: " + e.message; }
+}
+
+async function decide(id, verb) {
+  try { await api(`/api/actions/${id}/${verb}`, { method: "POST" }); } catch (e) { alert(e.message); }
+  loadActions();
+}
+
+async function loadActions() {
+  const { actions, auto } = await (await api("/api/actions")).json();
+  $("auto-note").textContent = auto ? "unattended actions ON (policy-gated)" : "unattended actions off - a person approves everything";
+  $("actions").replaceChildren(...actions.slice(0, 30).map(a => h("div", { class: "action " + a.status },
+    h("div", {}, h("span", { class: "domain" }, a.domain), h("div", { class: "dim" }, `${a.kind} - ${a.status} - ${a.source}`)),
+    a.status === "pending_approval" ? h("div", { class: "btns" },
+      h("button", { on: { click: () => decide(a.id, "approve") } }, "Approve"),
+      h("button", { class: "danger", on: { click: () => decide(a.id, "reject") } }, "Reject")) : null)));
+}
+
+async function loadVolume() {
+  const { buckets } = await (await api("/api/volume")).json();
+  const max = Math.max(1, ...buckets.map(b => b.flagged));
+  // heights via the CSSOM (allowed by the CSP), not a style attribute
+  const bars = buckets.map(b => { const s = h("span", { title: `${b.bucket}: ${b.flagged}` }); s.style.height = Math.round(100 * b.flagged / max) + "%"; return s; });
+  $("volume").replaceChildren(bars.length ? h("div", { class: "bars" }, bars) : h("span", { class: "dim" }, "no data yet"));
+}
+
+function stats(s) { $("seen").textContent = s.seen; $("flagged").textContent = s.flagged; }
+
+function connect() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { ws.send(token); $("conn").textContent = "live"; };   // token in the first message, never the URL
+  ws.onclose = () => { $("conn").textContent = "disconnected"; if (token) setTimeout(connect, 3000); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "hit") { stats(m.stats); renderHit(m); }
+    else if (m.type === "investigation") { renderInvestigation(m); loadActions(); }
+    else if (m.type === "actions") loadActions();
+  };
+}
+
+async function start() {
+  try {
+    const d = await (await api("/api/hits")).json();
+    stats(d.stats);
+    d.hits.reverse().forEach(x => renderHit(x, true));
+    $("login").hidden = true; $("app").hidden = false;
+    connect(); loadActions(); loadVolume(); setInterval(loadVolume, 60000);
+  } catch { $("login-error").textContent = "Token rejected or server unreachable."; $("login").hidden = false; }
+}
+
+$("login").addEventListener("submit", e => {
+  e.preventDefault();
+  token = $("token").value.trim(); $("token").value = "";
+  tokenStore.set(token);
+  start();
+});
+if (token) start(); else $("login").hidden = false;

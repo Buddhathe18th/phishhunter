@@ -4,55 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Phishhunter</title>
-<style>
-  :root { --bg:#0e1116; --panel:#171b22; --text:#e6e9ef; --dim:#8b93a1; --hi:#ff4d4f; --mid:#f5a524; --lo:#3fb950; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.4 system-ui, sans-serif; }
-  header { padding:16px 20px; display:flex; gap:24px; align-items:baseline; border-bottom:1px solid #232a34; }
-  h1 { margin:0; font-size:18px; }
-  .stat { color:var(--dim); } .stat b { color:var(--text); font-variant-numeric:tabular-nums; }
-  main { padding:16px 20px; display:grid; gap:10px; max-width:900px; }
-  .hit { background:var(--panel); border-radius:8px; padding:12px 14px; border-left:4px solid var(--mid); animation:in .25s ease; }
-  .hit.high { border-left-color:var(--hi); }
-  .hit .top { display:flex; justify-content:space-between; gap:12px; }
-  .domain { font:600 15px ui-monospace, Consolas, monospace; word-break:break-all; }
-  .score { font-weight:700; }
-  .reasons { margin:6px 0 0; padding-left:18px; color:var(--dim); font-size:13px; }
-  a { color:#6cb6ff; font-size:13px; }
-  @keyframes in { from { opacity:0; transform:translateY(-6px); } }
-</style>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
   <h1>Phishhunter</h1>
   <span class="stat">domains seen <b id="seen">0</b></span>
   <span class="stat">flagged <b id="flagged">0</b></span>
-  <span class="stat" id="conn">connecting...</span>
+  <span class="stat" id="conn">not connected</span>
 </header>
-<main id="feed"></main>
-<script>
-  const feed = document.getElementById("feed");
-  function render(h, prepend = true) {
-    const el = document.createElement("div");
-    el.className = "hit" + (h.score >= 70 ? " high" : "");
-    const top = document.createElement("div"); top.className = "top";
-    const d = document.createElement("span"); d.className = "domain"; d.textContent = h.domain;
-    const s = document.createElement("span"); s.className = "score"; s.textContent = h.score + "/100";
-    top.append(d, s);
-    const ul = document.createElement("ul"); ul.className = "reasons";
-    h.reasons.forEach(r => { const li = document.createElement("li"); li.textContent = r; ul.append(li); });
-    const a = document.createElement("a"); a.href = "/report/" + encodeURIComponent(h.domain);
-    a.target = "_blank"; a.textContent = "abuse report";
-    el.append(top, ul, a);
-    prepend ? feed.prepend(el) : feed.append(el);
-    while (feed.children.length > 100) feed.lastChild.remove();
-  }
-  function stats(s) { seen.textContent = s.seen; flagged.textContent = s.flagged; }
-  fetch("/hits").then(r => r.json()).then(d => { stats(d.stats); d.hits.forEach(h => render(h, false)); });
-  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-  ws.onopen = () => { conn.textContent = "live"; ws.send("hi"); };
-  ws.onclose = () => { conn.textContent = "disconnected"; };
-  ws.onmessage = e => { const h = JSON.parse(e.data); stats(h.stats); render(h); };
-</script>
+
+<form id="login" hidden>
+  <p>Enter the API token (the <code>API_TOKEN</code> from your .env, or the one printed at server start).</p>
+  <input id="token" type="password" autocomplete="off" required aria-label="API token">
+  <button type="submit">Connect</button>
+  <p id="login-error" class="err"></p>
+</form>
+
+<div id="app" class="cols" hidden>
+  <section>
+    <h2>Live lookalikes <small>click one to investigate</small></h2>
+    <div id="feed" class="stack"></div>
+  </section>
+  <section>
+    <h2>Investigation</h2>
+    <div id="investigation" class="panel dim">Select a domain, or wait for auto-investigation of high-scoring hits.</div>
+    <h2>Actions <small id="auto-note"></small></h2>
+    <div id="actions" class="stack"></div>
+    <h2>Flagged per hour <small>last 24h</small></h2>
+    <div id="volume" class="panel"></div>
+  </section>
+</div>
+<script src="/static/app.js"></script>
 </body>
 </html>
