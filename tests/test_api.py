@@ -33,6 +33,7 @@ def test_post_endpoints_require_token(client):
     assert client.post("/api/investigate", json={"domain": BAD}).status_code == 401
     assert client.post("/api/evidence", json={"text": "x" * 20}).status_code == 401
     assert client.post("/api/actions/" + "a" * 32 + "/approve").status_code == 401
+    assert client.post("/api/simulate").status_code == 401
 
 
 def test_static_page_and_health_are_public_and_carry_security_headers(client):
@@ -96,6 +97,21 @@ def test_report_endpoint_validates_domain(client):
     assert client.get("/api/report/evil..com", headers=AUTH).status_code == 422
     assert client.get("/api/report/unknown-domain.example", headers=AUTH).status_code == 404
     assert BAD in client.get(f"/api/report/{BAD}", headers=AUTH).text
+
+
+def test_simulate_flags_a_fresh_attack_in_demo_mode(client):
+    r = client.post("/api/simulate", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["flagged"] is True
+    assert client.get("/api/hits", headers=AUTH).json()["stats"]["flagged"] >= 1
+
+
+def test_simulate_refused_outside_demo_mode(settings, store):
+    from dataclasses import replace
+    app = create_app(replace(settings, demo=False), store, start_pipeline=False)
+    with TestClient(app, base_url="http://localhost") as c:
+        assert c.post("/api/simulate", headers=AUTH).status_code == 400
 
 
 def test_post_rate_limit(settings, store):

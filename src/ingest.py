@@ -22,6 +22,14 @@ DEMO_DOMAINS = [
 ]
 DEMO_ISSUERS = ["Let's Encrypt", "Google Trust Services", "ZeroSSL"]
 
+# A separate pool for on-demand simulation (POST /api/simulate), so triggering it live doesn't just
+# repeat whatever the passive replay already happened to show.
+SIMULATED_ATTACKS = [
+    "binance-security-alert.xyz", "cibc-online-verify.top", "scotiabank-account-locked.click",
+    "amaz0n-order-issue.shop", "bmo-signin-secure.online", "google-account-recovery-team.icu",
+    "apple-id-locked-verify.xyz", "netflix-payment-declined.top",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class CertEvent:

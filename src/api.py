@@ -7,6 +7,7 @@ rate-limited; API docs are off unless ENABLE_DOCS=1.
 from __future__ import annotations
 
 import asyncio
+import random
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .actions import ActionEngine
 from .config import Settings, load
-from .ingest import certstream_events, demo_events
+from .ingest import SIMULATED_ATTACKS, certstream_events, demo_events
 from .investigate import Investigation, Investigator
 from .kibana import Kibana
 from .score import BRANDS, score_domain
@@ -89,24 +90,33 @@ async def broadcast(state: State, message: dict) -> None:
             state.clients.discard(ws)
 
 
-async def pipeline(state: State) -> None:
+async def handle_event(state: State, raw_domain: str, issuer: str | None) -> bool:
+    """Score one certificate event and, if it clears the threshold, record and broadcast it. Shared by the
+    passive stream and the on-demand /api/simulate trigger so both go through the exact same logic.
+    Returns True if the domain was flagged.
+    """
     s = state.settings
-    source = demo_events() if s.demo else certstream_events()
+    domain = clean_domain(raw_domain)
+    if domain is None:
+        return False
+    state.stats["seen"] += 1
+    result = score_domain(domain)
+    if result.score < s.threshold:
+        return False
+    state.stats["flagged"] += 1
+    doc = hit_doc(result, issuer)
+    await asyncio.to_thread(state.store.upsert_hit, domain, doc)
+    await broadcast(state, {"type": "hit", **doc, "stats": state.stats})
+    if s.auto_investigate and result.score >= s.investigate_score and not state.queue.full():
+        state.queue.put_nowait(domain)
+    return True
+
+
+async def pipeline(state: State) -> None:
+    source = demo_events() if state.settings.demo else certstream_events()
     async for event in source:
         try:
-            domain = clean_domain(event.domain)
-            if domain is None:
-                continue
-            state.stats["seen"] += 1
-            result = score_domain(domain)
-            if result.score < s.threshold:
-                continue
-            state.stats["flagged"] += 1
-            doc = hit_doc(result, event.issuer)
-            await asyncio.to_thread(state.store.upsert_hit, domain, doc)
-            await broadcast(state, {"type": "hit", **doc, "stats": state.stats})
-            if s.auto_investigate and result.score >= s.investigate_score and not state.queue.full():
-                state.queue.put_nowait(domain)
+            await handle_event(state, event.domain, event.issuer)
         except Exception as exc:  # one bad event (or a store hiccup) must not stop the stream
             print(f"[pipeline] error: {type(exc).__name__}", file=sys.stderr)
             sentry_sdk.capture_exception(exc)
@@ -225,6 +235,17 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
         payload = inv.to_dict()
         await broadcast(state, {"type": "investigation", **payload})
         return payload
+
+    @app.post("/api/simulate", dependencies=[Depends(auth)])
+    async def simulate() -> dict:
+        """Demo-mode only: inject one fresh synthetic attack right now, so the whole pipeline (score, flag,
+        investigate, propose) reacts live instead of waiting on the passive replay's own timing.
+        """
+        if not settings.demo:
+            raise HTTPException(400, "only available in DEMO=1 mode - it would be misleading against a live stream")
+        domain = random.choice(SIMULATED_ATTACKS)  # noqa: S311 - picking a demo fixture, not a security decision
+        flagged = await handle_event(state, domain, random.choice(["Let's Encrypt", "ZeroSSL"]))  # noqa: S311
+        return {"domain": domain, "flagged": flagged}
 
     @app.post("/api/evidence", dependencies=[Depends(auth)], status_code=201)
     async def add_evidence(req: EvidenceReq) -> dict:

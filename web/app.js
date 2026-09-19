@@ -127,16 +127,31 @@ function connect() {
   };
 }
 
+async function simulate() {
+  const btn = $("simulate");
+  btn.disabled = true; btn.textContent = "Simulating...";
+  try {
+    const { domain } = await (await api("/api/simulate", { method: "POST" })).json();
+    btn.textContent = `Simulated ${domain}`;
+  } catch (e) {
+    btn.textContent = e.message.toLowerCase().includes("demo") ? "Only available in demo mode" : "Simulate an attack";
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = "Simulate an attack"; }, 2500);
+  }
+}
+
 async function start() {
   try {
     const d = await (await api("/api/hits")).json();
     stats(d.stats);
     d.hits.reverse().forEach(x => renderHit(x, true));
-    $("login").hidden = true; $("app").hidden = false;
+    $("login").hidden = true; $("app").hidden = false; $("simulate").hidden = false;
     connect(); loadActions(); loadVolume(); loadCampaigns();
     setInterval(loadVolume, 60000); setInterval(loadCampaigns, 60000);
   } catch { $("login-error").textContent = "Token rejected or server unreachable."; $("login").hidden = false; }
 }
+
+$("simulate").addEventListener("click", simulate);
 
 $("login").addEventListener("submit", e => {
   e.preventDefault();

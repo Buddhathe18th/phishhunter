@@ -2,6 +2,7 @@
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
 header { padding:16px 20px; display:flex; flex-wrap:wrap; gap:8px 24px; align-items:baseline; border-bottom:1px solid #232a34; }
+#simulate { margin-left:auto; }
 h1 { margin:0; font:600 18px ui-monospace, Consolas, monospace; text-wrap:balance; }
 h2 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:18px 0 8px; text-wrap:balance; }
 h2 small { text-transform:none; letter-spacing:0; font-weight:400; margin-left:6px; }
