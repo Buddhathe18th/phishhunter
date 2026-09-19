@@ -21,6 +21,8 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from scripts.benchmark import run_benchmark
+
 from .actions import ActionEngine
 from .config import Settings, load
 from .ingest import SIMULATED_ATTACKS, certstream_events, demo_events
@@ -228,6 +230,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
     @app.get("/api/volume", dependencies=[Depends(auth)])
     async def volume() -> dict:
         return {"buckets": await asyncio.to_thread(store.volume, 24)}
+
+    @app.get("/api/benchmark", dependencies=[Depends(auth)])
+    async def benchmark() -> dict:
+        return await asyncio.to_thread(run_benchmark)
 
     @app.post("/api/investigate", dependencies=[Depends(auth)])
     async def investigate(req: InvestigateReq) -> dict:

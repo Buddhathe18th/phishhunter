@@ -48,25 +48,38 @@ def hostnames_from(urls: list[str]) -> list[str]:
     return hosts
 
 
-def main() -> None:
+def run_benchmark() -> dict:
+    """The same two checks as the CLI report, as structured data - used by both `python -m scripts.benchmark`
+    and the dashboard's GET /api/benchmark, so the number a judge sees live is the number this file computes,
+    not a hand-typed claim in the README.
+    """
     urls = DATA.read_text().splitlines()
     hosts = hostnames_from(urls)
-    scored = [(h, score_domain(h)) for h in hosts]
-    in_scope = [(h, s) for h, s in scored if s.brand]
+    in_scope = [(h, score_domain(h)) for h in hosts]
+    in_scope = [(h, s) for h, s in in_scope if s.brand]
     flagged = [(h, s) for h, s in in_scope if s.score >= 40]
-
-    recall_pct = 100 * len(flagged) / len(in_scope) if in_scope else 0
-    print(f"OpenPhish snapshot: {len(urls)} URLs, {len(hosts)} unique hostnames")
-    print(f"  targeting one of our {len(BRANDS)} configured brands: {len(in_scope)}")
-    print(f"  of those, flagged (score>=40): {len(flagged)}  ({recall_pct:.0f}% recall in scope)")
-    for h, s in in_scope:
-        mark = "caught" if s.score >= 40 else "MISSED"
-        print(f"    [{mark}] {h}  score={s.score}  brand={s.brand}")
-
     fp = [(d, score_domain(d)) for d in KNOWN_GOOD if score_domain(d).score >= 40]
-    print(f"\nKnown-legitimate spot-check: {len(KNOWN_GOOD)} domains, false positives: {len(fp)}")
-    for d, s in fp:
-        print(f"    FALSE POSITIVE: {d}  score={s.score}  reasons={s.reasons}")
+    return {
+        "snapshot": DATA.name,
+        "total_urls": len(urls),
+        "unique_hosts": len(hosts),
+        "configured_brands": len(BRANDS),
+        "in_scope": len(in_scope),
+        "flagged": len(flagged),
+        "recall_pct": round(100 * len(flagged) / len(in_scope), 1) if in_scope else None,
+        "known_good_tested": len(KNOWN_GOOD),
+        "false_positives": len(fp),
+        "false_positive_examples": [d for d, _ in fp],
+    }
+
+
+def main() -> None:
+    r = run_benchmark()
+    print(f"OpenPhish snapshot ({r['snapshot']}): {r['total_urls']} URLs, {r['unique_hosts']} unique hostnames")
+    print(f"  targeting one of our {r['configured_brands']} configured brands: {r['in_scope']}")
+    print(f"  of those, flagged (score>=40): {r['flagged']}  ({r['recall_pct']}% recall in scope)")
+    print(f"\nKnown-legitimate spot-check: {r['known_good_tested']} domains, "
+          f"false positives: {r['false_positives']} {r['false_positive_examples']}")
 
 
 if __name__ == "__main__":

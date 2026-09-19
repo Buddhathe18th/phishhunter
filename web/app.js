@@ -113,6 +113,17 @@ async function loadCampaigns() {
   renderCampaigns(campaigns);
 }
 
+async function loadBenchmark() {
+  const r = await (await api("/api/benchmark")).json();
+  $("benchmark").className = "panel";
+  $("benchmark").replaceChildren(
+    h("div", { class: "top" },
+      h("span", {}, `${r.recall_pct}% recall`, h("span", { class: "dim" }, ` on ${r.in_scope} in-scope phishing URLs`)),
+      h("span", { class: r.false_positives ? "score" : "dim" }, `${r.false_positives}/${r.known_good_tested} false positives`)),
+    h("div", { class: "dim" }, `snapshot: ${r.snapshot}, ${r.total_urls} live URLs, ${r.configured_brands} configured brands`),
+  );
+}
+
 function stats(s) { $("seen").textContent = s.seen; $("flagged").textContent = s.flagged; }
 
 function connect() {
@@ -146,7 +157,7 @@ async function start() {
     stats(d.stats);
     d.hits.reverse().forEach(x => renderHit(x, true));
     $("login").hidden = true; $("app").hidden = false; $("simulate").hidden = false;
-    connect(); loadActions(); loadVolume(); loadCampaigns();
+    connect(); loadActions(); loadVolume(); loadCampaigns(); loadBenchmark();
     setInterval(loadVolume, 60000); setInterval(loadCampaigns, 60000);
   } catch { $("login-error").textContent = "Token rejected or server unreachable."; $("login").hidden = false; }
 }

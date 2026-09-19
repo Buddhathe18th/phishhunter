@@ -18,7 +18,8 @@ def client(settings, store):
         yield c
 
 
-PROTECTED_GET = ["/api/hits", "/api/campaigns", "/api/volume", "/api/actions", "/blocklist.txt", f"/api/report/{BAD}"]
+PROTECTED_GET = ["/api/hits", "/api/campaigns", "/api/volume", "/api/actions", "/api/benchmark", "/blocklist.txt",
+                 f"/api/report/{BAD}"]
 
 
 @pytest.mark.parametrize("path", PROTECTED_GET)
