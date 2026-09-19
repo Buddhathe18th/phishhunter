@@ -37,6 +37,9 @@ MULTIPART_SUFFIXES = {"co.uk", "com.au", "co.jp", "com.br", "co.in", "org.uk"}
 HOMOGLYPHS = [("rn", "m"), ("vv", "w"), ("cl", "d"), ("0", "o"), ("1", "l"),
               ("3", "e"), ("5", "s"), ("@", "a"), ("$", "s")]
 
+DEFENSIVE_PREFIXES = ("secure", "login", "verify", "account", "support")
+DEFENSIVE_TLDS = ("xyz", "top", "click", "shop", "online")
+
 
 @dataclass
 class Score:
@@ -112,3 +115,31 @@ def score_domain(domain: str) -> Score:
 
     result.score = min(result.score, 100)
     return result
+
+
+def suggest_defensive_domains(brand: str, limit: int = 8) -> list[str]:
+    """Domains nobody has registered yet that fit the same patterns attackers use against this brand.
+
+    Purely generative from the brand name: no lookup, no registration check, no claim that any of these exist
+    or are malicious. It is the scorer run in reverse, so a brand owner (or this tool's own operator) can pre-stage
+    monitoring or defensive registration instead of only ever reacting after a certificate is already issued.
+    """
+    if brand not in BRANDS or len(brand) < 3:
+        return []
+    variants: set[str] = set()
+    for pre in DEFENSIVE_PREFIXES:
+        variants.add(f"{pre}-{brand}")
+        variants.add(f"{brand}-{pre}")
+    for fake, real in HOMOGLYPHS:
+        if real in brand and fake.isalnum():  # skip '@'/'$': valid as a display trick, not as a DNS label
+            variants.add(brand.replace(real, fake, 1))
+    variants.add(brand[:-2] + brand[-1] + brand[-2])  # last two letters swapped
+    variants.add(brand[0] * 2 + brand[1:])            # doubled first letter
+
+    out: list[str] = []
+    for v in sorted(variants):
+        for tld in DEFENSIVE_TLDS:
+            out.append(f"{v}.{tld}")
+            if len(out) >= limit:
+                return out
+    return out

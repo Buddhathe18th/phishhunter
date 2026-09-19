@@ -25,7 +25,7 @@ from .security import clean_domain, clean_text, is_public_ip
 MAX_BYTES = 512 * 1024
 MAX_REDIRECTS = 3
 TIMEOUT = 5.0
-USER_AGENT = "phishhunter-triage/1.0 (defensive research; +https://github.com/Buddhathe18th/phishhunter)"
+USER_AGENT = "doppel-triage/1.0 (defensive research; +https://github.com/Buddhathe18th/doppel)"
 
 Resolver = Callable[[str], list[str]]
 

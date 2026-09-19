@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
@@ -108,6 +109,7 @@ async def pipeline(state: State) -> None:
                 state.queue.put_nowait(domain)
         except Exception as exc:  # one bad event (or a store hiccup) must not stop the stream
             print(f"[pipeline] error: {type(exc).__name__}", file=sys.stderr)
+            sentry_sdk.capture_exception(exc)
 
 
 async def investigation_worker(state: State) -> None:
@@ -125,6 +127,7 @@ async def investigation_worker(state: State) -> None:
             await broadcast(state, {"type": "investigation", **inv.to_dict()})
         except Exception as exc:
             print(f"[investigate] error: {type(exc).__name__}", file=sys.stderr)
+            sentry_sdk.capture_exception(exc)
 
 
 async def action_sweeper(state: State) -> None:
@@ -136,10 +139,14 @@ async def action_sweeper(state: State) -> None:
                 await broadcast(state, {"type": "actions"})
         except Exception as exc:
             print(f"[sweeper] error: {type(exc).__name__}", file=sys.stderr)
+            sentry_sdk.capture_exception(exc)
 
 
 def create_app(settings: Settings | None = None, store: Store | None = None, start_pipeline: bool = True) -> FastAPI:
     settings = settings or load()
+    if settings.sentry_dsn and not sentry_sdk.is_initialized():
+        sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.2,
+                         environment="demo" if settings.demo else "live", send_default_pii=False)
     store = store or build_store(settings)
     kibana = Kibana(settings) if settings.kibana_url and settings.elastic_url else None
     holder: dict[str, Investigator] = {}
@@ -157,12 +164,12 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
             tasks = [asyncio.create_task(pipeline(state)), asyncio.create_task(investigation_worker(state)),
                      asyncio.create_task(action_sweeper(state))]
         if settings.token_generated:
-            print(f"[phishhunter] no API_TOKEN set; this run's token is: {settings.api_token}", file=sys.stderr)
+            print(f"[doppel] no API_TOKEN set; this run's token is: {settings.api_token}", file=sys.stderr)
         yield
         for task in tasks:
             task.cancel()
 
-    app = FastAPI(title="phishhunter", lifespan=lifespan, docs_url="/docs" if settings.enable_docs else None,
+    app = FastAPI(title="doppel", lifespan=lifespan, docs_url="/docs" if settings.enable_docs else None,
                   redoc_url=None, openapi_url="/openapi.json" if settings.enable_docs else None)
     app.state.ph = state
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(settings.allowed_hosts))

@@ -1,6 +1,6 @@
 import pytest
 
-from src.score import score_domain, split_domain
+from src.score import score_domain, split_domain, suggest_defensive_domains
 
 BAD = [
     "paypa1-secure-login.xyz",
@@ -46,3 +46,14 @@ def test_split_domain_handles_multipart_tld():
 def test_reasons_explain_score():
     result = score_domain("paypa1-secure-login.xyz")
     assert result.reasons and result.brand == "paypal"
+
+
+def test_suggest_defensive_domains_covers_known_brand():
+    suggestions = suggest_defensive_domains("paypal")
+    assert suggestions and len(suggestions) <= 8
+    assert all(s.rsplit(".", 1)[0] != "paypal" for s in suggestions)  # variants, not the real domain
+    assert all(score_domain(s).score > 0 for s in suggestions)  # they'd trip our own scorer
+
+
+def test_suggest_defensive_domains_empty_for_unknown_brand():
+    assert suggest_defensive_domains("not-a-real-brand") == []

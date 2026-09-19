@@ -87,3 +87,19 @@ def test_generated_token_when_unset(monkeypatch):
     monkeypatch.delenv("API_TOKEN", raising=False)
     s = load()
     assert s.token_generated and len(s.api_token) >= 32
+
+
+def test_optional_integrations_default_off(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SENTRY_DSN", raising=False)
+    s = load()
+    assert s.openai_api_key is None and s.sentry_dsn is None and s.openai_model == "gpt-4o-mini"
+
+
+def test_optional_integrations_read_from_env(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
+    monkeypatch.setenv("SENTRY_DSN", "https://public@o0.ingest.sentry.io/1")
+    s = load()
+    assert s.openai_api_key == "sk-test" and s.openai_model == "gpt-4o" and s.sentry_dsn is not None
+    assert "sk-test" not in repr(s)  # secrets stay out of repr, same guarantee as the other keys

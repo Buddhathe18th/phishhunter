@@ -1,9 +1,9 @@
 # Import in Kibana: Workflows -> Create -> paste. Then expose it to the agent as a tool:
 #   python -m src.setup_elastic --workflow-id <id shown in Kibana>
-# The workflow only *records a proposal*. phishhunter's policy gate (src/actions.py) decides whether it runs
+# The workflow only *records a proposal*. doppel's policy gate (src/actions.py) decides whether it runs
 # unattended (needs AUTO_ACTIONS=1 plus corroborating evidence) or waits for a person in the dashboard.
 version: "1"
-name: phishhunter_propose_action
+name: doppel_propose_action
 description: Record a proposed action (block_domain, notify, file_report) for a suspected phishing domain.
 enabled: true
 triggers:

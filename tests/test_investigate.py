@@ -88,5 +88,63 @@ def test_agent_builder_failure_degrades_gracefully(store, settings):
 
     investigator = Investigator(store, engine, settings, kibana=Broken())
     inv = run(investigator.run(BAD))
-    assert inv.agent_summary is None and inv.verdict != "benign"
+    assert inv.agent_summary is None and inv.agent_source is None and inv.verdict != "benign"
     assert any("unavailable" in t["result"] for t in inv.trace if t["tool"] == "agent_builder")
+
+
+def test_no_analyst_note_without_kibana_or_openai(store, settings):
+    add_hit(store, BAD)
+    _, investigator = make_engine(store, settings)
+    inv = run(investigator.run(BAD))
+    assert inv.agent_summary is None and inv.agent_source is None
+
+
+def test_openai_fallback_used_when_no_kibana(store, settings, monkeypatch):
+    add_hit(store, BAD)
+    _, investigator = make_engine(store, settings, openai_api_key="test-key")  # kibana stays unset
+
+    class FakeMessage:
+        content = "Looks like a paypal credential-phishing kit; recommend blocking."
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            assert kwargs["model"] == investigator.settings.openai_model
+            return type("Resp", (), {"choices": [FakeChoice()]})()
+
+    class FakeOpenAI:
+        def __init__(self, api_key=None):
+            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+    inv = run(investigator.run(BAD))
+    assert inv.agent_source == "openai"
+    assert "phishing kit" in inv.agent_summary
+    assert any(t["tool"] == "openai_analyst" for t in inv.trace)
+
+
+def test_openai_never_called_when_kibana_succeeds(store, settings, monkeypatch):
+    add_hit(store, BAD)
+    engine, _ = make_engine(store, settings, openai_api_key="test-key")
+
+    class Working:
+        def converse(self, *a, **k):
+            return "agent builder verdict"
+
+    def must_not_be_called(*a, **k):
+        raise AssertionError("OpenAI should not be called when Agent Builder already answered")
+
+    monkeypatch.setattr("openai.OpenAI", must_not_be_called)
+    from dataclasses import replace as _replace
+    investigator = Investigator(store, engine, _replace(settings, openai_api_key="test-key"), kibana=Working())
+    inv = run(investigator.run(BAD))
+    assert inv.agent_source == "agent_builder" and inv.agent_summary == "agent builder verdict"
+
+
+def test_defensive_suggestions_attached_for_known_brand(store, settings):
+    add_hit(store, BAD)
+    _, investigator = make_engine(store, settings)
+    inv = run(investigator.run(BAD))
+    assert inv.defensive_suggestions and all("paypal" in s for s in inv.defensive_suggestions)

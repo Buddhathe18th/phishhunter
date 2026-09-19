@@ -67,10 +67,10 @@ class Settings:
     kibana_url: str | None = None
     kibana_api_key: str | None = field(default=None, repr=False)
     jina_api_key: str | None = field(default=None, repr=False)
-    embed_inference_id: str = "phishhunter-jina-embed"
-    rerank_inference_id: str = "phishhunter-jina-rerank"
+    embed_inference_id: str = "doppel-jina-embed"
+    rerank_inference_id: str = "doppel-jina-rerank"
     semantic: bool = False          # hybrid BM25 + Jina vectors + rerank (needs inference endpoints)
-    agent_id: str = "phishhunter-analyst"
+    agent_id: str = "doppel-analyst"
     # --- agent behaviour ---
     auto_investigate: bool = True
     investigate_score: int = 60
@@ -79,6 +79,10 @@ class Settings:
     auto_score: int = 85
     webhook_url: str | None = field(default=None, repr=False)
     outbox_dir: str = "outbox"
+    # --- optional integrations (all no-ops when unset) ---
+    openai_api_key: str | None = field(default=None, repr=False)
+    openai_model: str = "gpt-4o-mini"
+    sentry_dsn: str | None = field(default=None, repr=False)
 
 
 def load() -> Settings:
@@ -107,10 +111,10 @@ def load() -> Settings:
         kibana_url=_url("KIBANA_URL"),
         kibana_api_key=_secret("KIBANA_API_KEY") or _secret("ELASTIC_API_KEY"),
         jina_api_key=jina,
-        embed_inference_id=os.getenv("JINA_EMBED_INFERENCE_ID", "phishhunter-jina-embed"),
-        rerank_inference_id=os.getenv("JINA_RERANK_INFERENCE_ID", "phishhunter-jina-rerank"),
+        embed_inference_id=os.getenv("JINA_EMBED_INFERENCE_ID", "doppel-jina-embed"),
+        rerank_inference_id=os.getenv("JINA_RERANK_INFERENCE_ID", "doppel-jina-rerank"),
         semantic=_bool("SEMANTIC_SEARCH", default=jina is not None),
-        agent_id=os.getenv("AGENT_ID", "phishhunter-analyst"),
+        agent_id=os.getenv("AGENT_ID", "doppel-analyst"),
         auto_investigate=_bool("AUTO_INVESTIGATE", True),
         investigate_score=_int("INVESTIGATE_SCORE", 60, 1, 100),
         triage_fetch=_bool("TRIAGE_FETCH"),
@@ -118,4 +122,7 @@ def load() -> Settings:
         auto_score=_int("AUTO_SCORE", 85, 1, 100),
         webhook_url=_url("ACTION_WEBHOOK_URL"),
         outbox_dir=os.getenv("OUTBOX_DIR", "outbox"),
+        openai_api_key=_secret("OPENAI_API_KEY"),
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        sentry_dsn=_secret("SENTRY_DSN"),
     )

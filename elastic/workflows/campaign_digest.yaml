@@ -1,6 +1,6 @@
 # A manual (or later, scheduled) digest: pull the highest-scoring recent hits and let the agent summarise campaigns.
 version: "1"
-name: phishhunter_campaign_digest
+name: doppel_campaign_digest
 description: Summarise the highest-risk lookalike domains flagged recently and group them into campaigns.
 enabled: true
 triggers:
@@ -19,7 +19,7 @@ steps:
       size: 25
   - name: summarise
     type: ai.agent
-    agent-id: "phishhunter-analyst"
+    agent-id: "doppel-analyst"
     with:
       message: |
         These lookalike domains were flagged recently. Group them into campaigns (shared brand, TLD, issuer, wording)

@@ -148,7 +148,7 @@ class ActionEngine:
     def _notify(self, action: dict) -> str:
         if not self.settings.webhook_url:
             return "no ACTION_WEBHOOK_URL configured; recorded only"
-        text = f"phishhunter: {action['kind']} for {action['domain']} - {action['rationale'][:200]}"
+        text = f"doppel: {action['kind']} for {action['domain']} - {action['rationale'][:200]}"
         client = self.http or httpx.Client(timeout=5.0, follow_redirects=False, trust_env=False)
         resp = client.post(self.settings.webhook_url, json={"text": text})
         resp.raise_for_status()

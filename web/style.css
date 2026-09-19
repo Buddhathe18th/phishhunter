@@ -11,8 +11,9 @@ input { background:var(--panel); border:1px solid #2b3340; color:var(--text); pa
 button { background:#2b6cb0; border:0; color:#fff; padding:8px 14px; border-radius:6px; font:inherit; cursor:pointer; }
 button.danger { background:#9b2c2c; }
 .err { color:var(--hi); min-height:1.2em; }
-.cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 24px; padding:0 20px 24px; max-width:1300px; }
-@media (max-width: 860px) { .cols { grid-template-columns:1fr; } }
+.cols { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:0 24px; padding:0 20px 24px; max-width:1500px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.chip { background:#232a34; border-radius:99px; padding:2px 10px; font:12px ui-monospace, Consolas, monospace; color:var(--dim); }
 .stack { display:grid; gap:10px; align-content:start; }
 .hit, .panel, .action { background:var(--panel); border-radius:8px; padding:12px 14px; border-left:4px solid var(--mid); }
 .panel { border-left-color:#2b3340; }

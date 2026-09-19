@@ -59,7 +59,7 @@ def test_connects_to_pinned_ip_with_host_header():
     facts = run(fetch_page("paypa1.example", resolver=lambda h: ["93.184.216.34"], transport=httpx.MockTransport(handler)))
     assert facts.has_login_form and facts.ip == "93.184.216.34"
     assert seen[0][0] == "93.184.216.34" and seen[0][1] == "paypa1.example" and seen[0][2] is None
-    assert seen[0][3].startswith("phishhunter-triage")
+    assert seen[0][3].startswith("doppel-triage")
 
 
 def test_redirect_to_internal_host_is_blocked():

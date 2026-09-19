@@ -46,6 +46,8 @@ function renderHit(d, prepend = true) {
   while (feed.children.length > 60) feed.lastChild.remove();
 }
 
+const AGENT_LABEL = { agent_builder: "Agent Builder analyst", openai: "OpenAI analyst" };
+
 function renderInvestigation(inv) {
   const box = $("investigation");
   box.className = "panel";
@@ -53,11 +55,21 @@ function renderInvestigation(inv) {
     h("div", { class: "top" }, h("span", { class: "domain" }, inv.domain), h("span", { class: "verdict v-" + inv.verdict }, inv.verdict)),
     h("p", {}, inv.summary),
     inv.corroboration.length ? h("ul", { class: "reasons" }, inv.corroboration.map(c => h("li", {}, c))) : null,
-    inv.agent_summary ? h("div", { class: "lure" }, h("b", {}, "Agent Builder analyst"), h("div", {}, inv.agent_summary)) : null,
+    inv.agent_summary ? h("div", { class: "lure" }, h("b", {}, AGENT_LABEL[inv.agent_source] || "Analyst"), h("div", {}, inv.agent_summary)) : null,
     ...inv.lures.map(l => h("div", { class: "lure" }, h("b", {}, `[${l.language || "?"}] ${l.type || ""}`), " " + l.snippet)),
     inv.lookalikes.length ? h("div", { class: "lure" }, h("b", {}, "Similar flagged domains: "), inv.lookalikes.map(x => x.domain).join(", ")) : null,
+    (inv.defensive_suggestions || []).length ? h("div", { class: "lure" },
+      h("b", {}, "Worth registering defensively"),
+      h("div", { class: "chips" }, inv.defensive_suggestions.map(s => h("span", { class: "chip" }, s)))) : null,
     h("ol", { class: "trace" }, inv.trace.map(t => h("li", {}, h("b", {}, t.tool), " - " + t.result))),
     h("a", { href: "#", on: { click: async e => { e.preventDefault(); const r = await api("/api/report/" + encodeURIComponent(inv.domain)); alert(await r.text()); } } }, "view abuse report"));
+}
+
+function renderCampaigns(campaigns) {
+  $("campaigns").replaceChildren(...campaigns.length ? campaigns.map(c => h("div", { class: "hit" },
+    h("div", { class: "top" }, h("span", { class: "domain" }, `${c.brand} via ${c.issuer || "?"}`), h("span", { class: "score" }, c.domains + " domains")),
+    h("div", { class: "dim" }, `.${c.tld || "?"} - peak score ${c.top_score} - last seen ${new Date(c.last_seen).toLocaleTimeString()}`)))
+    : [h("span", { class: "dim" }, "no clusters yet (needs 2+ related domains in the last 24h)")]);
 }
 
 async function investigate(domain) {
@@ -65,7 +77,7 @@ async function investigate(domain) {
   try {
     const res = await api("/api/investigate", { method: "POST", body: JSON.stringify({ domain }) });
     renderInvestigation(await res.json());
-    loadActions();
+    loadActions(); loadCampaigns();
   } catch (e) { $("investigation").textContent = "Investigation failed: " + e.message; }
 }
 
@@ -92,6 +104,11 @@ async function loadVolume() {
   $("volume").replaceChildren(bars.length ? h("div", { class: "bars" }, bars) : h("span", { class: "dim" }, "no data yet"));
 }
 
+async function loadCampaigns() {
+  const { campaigns } = await (await api("/api/campaigns")).json();
+  renderCampaigns(campaigns);
+}
+
 function stats(s) { $("seen").textContent = s.seen; $("flagged").textContent = s.flagged; }
 
 function connect() {
@@ -101,7 +118,7 @@ function connect() {
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.type === "hit") { stats(m.stats); renderHit(m); }
-    else if (m.type === "investigation") { renderInvestigation(m); loadActions(); }
+    else if (m.type === "investigation") { renderInvestigation(m); loadActions(); loadCampaigns(); }
     else if (m.type === "actions") loadActions();
   };
 }
@@ -112,7 +129,8 @@ async function start() {
     stats(d.stats);
     d.hits.reverse().forEach(x => renderHit(x, true));
     $("login").hidden = true; $("app").hidden = false;
-    connect(); loadActions(); loadVolume(); setInterval(loadVolume, 60000);
+    connect(); loadActions(); loadVolume(); loadCampaigns();
+    setInterval(loadVolume, 60000); setInterval(loadCampaigns, 60000);
   } catch { $("login-error").textContent = "Token rejected or server unreachable."; $("login").hidden = false; }
 }
 

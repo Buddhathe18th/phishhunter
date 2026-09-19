@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Phishhunter</title>
+<title>Doppel</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <h1>Phishhunter</h1>
+  <h1>Doppel</h1>
   <span class="stat">domains seen <b id="seen">0</b></span>
   <span class="stat">flagged <b id="flagged">0</b></span>
   <span class="stat" id="conn">not connected</span>
@@ -33,6 +33,10 @@
     <div id="actions" class="stack"></div>
     <h2>Flagged per hour <small>last 24h</small></h2>
     <div id="volume" class="panel"></div>
+  </section>
+  <section>
+    <h2>Campaigns <small>last 24h, clustered by brand / issuer / TLD</small></h2>
+    <div id="campaigns" class="stack"></div>
   </section>
 </div>
 <script src="/static/app.js"></script>
