@@ -87,6 +87,25 @@ endpoints that already exist (for example Elastic Inference Service ones).
 to `outbox/` for you to submit. Approve or reject pending actions in the dashboard. `GET /blocklist.txt` (token
 required) serves the domains blocked by executed actions. Full threat model in [SECURITY.md](SECURITY.md).
 
+## Measured accuracy, not just a demo
+
+`python -m scripts.benchmark` runs the scorer against a frozen snapshot of OpenPhish's public feed of live
+phishing URLs (`data/openphish_sample_2026-09-19.txt`) plus a spot-check list of known-legitimate domains, and
+`tests/test_benchmark.py` holds these as permanent regression bounds. Last run:
+
+- **100% recall** (8/8) on phishing URLs in the snapshot that target one of our configured brands. Most of the
+  snapshot targets brands we haven't configured, which is expected and by design: this is a brand-protection
+  tool, not a general-purpose phishing detector, so recall is only a meaningful number on the in-scope subset.
+- **2/21 false positives** on the known-legitimate spot-check, both the same failure mode: a domain that
+  legitimately mentions a brand by name (`netflix-inc-investor-relations.com`, a university help page that
+  happens to reference Microsoft Teams) scores high enough to flag on the brand-mention signal alone, with no
+  other risk signal present. This is exactly why every action requires a human to approve it before it runs -
+  the base signal is tuned for recall, not precision, and the policy gate is what makes that an acceptable
+  tradeoff instead of a liability. Running this benchmark is also how we found and fixed a real bug: the demo
+  brand list originally included `"waterloo"`, which is a 94%-similar fuzzy match to the unrelated, legitimately
+  distinct `waterloo.ca` (the City of Waterloo, not the university) - a good example of why short or dictionary-word
+  brand names need care in a real deployment.
+
 ## Optional integrations
 
 Both are no-ops until you set the key; nothing else changes if you skip them.
@@ -111,6 +130,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 | `src/api.py`, `src/security.py`, `src/config.py` | API, security primitives, settings |
 | `elastic/workflows/` | Elastic Workflow definitions |
 | `web/` | Dashboard (no inline script/style, strict CSP) |
+| `scripts/benchmark.py` | Accuracy check against a frozen real-world sample (see Measured accuracy above) |
 
 ## Development
 

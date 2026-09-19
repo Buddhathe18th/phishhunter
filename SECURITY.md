@@ -40,7 +40,11 @@ never sends takedown requests on its own: reports are written to a local outbox 
 
 ## Known limitations
 
-- Scoring is heuristic; expect false positives and negatives.
+- Scoring is heuristic; expect false positives and negatives. Measured against a frozen real-world snapshot
+  (`python -m scripts.benchmark`, see README): 100% recall in-scope, but any domain that merely mentions a
+  configured brand by name - including legitimate uses like an investor-relations page or a university help
+  article - scores high enough to flag on that signal alone. This is a precision tradeoff, not an oversight:
+  it's the actual reason every action requires human approval rather than running unattended.
 - The in-memory demo store has lexical search only; cross-language matching needs the Elastic + Jina path.
 - Verified against a live Elasticsearch 9.5.1 node: mappings, hybrid retrieval, ES|QL, actions. **Not** verified
   against a live Kibana: the Agent Builder tool/agent registration and `converse` call follow Elastic's documented

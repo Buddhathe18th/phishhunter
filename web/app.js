@@ -100,7 +100,11 @@ async function loadVolume() {
   const { buckets } = await (await api("/api/volume")).json();
   const max = Math.max(1, ...buckets.map(b => b.flagged));
   // heights via the CSSOM (allowed by the CSP), not a style attribute
-  const bars = buckets.map(b => { const s = h("span", { title: `${b.bucket}: ${b.flagged}` }); s.style.height = Math.round(100 * b.flagged / max) + "%"; return s; });
+  const bars = buckets.map((b, i) => {
+    const s = h("span", { title: `${b.bucket}: ${b.flagged}`, class: i === buckets.length - 1 ? "now" : "" });
+    s.style.height = Math.round(100 * b.flagged / max) + "%";
+    return s;
+  });
   $("volume").replaceChildren(bars.length ? h("div", { class: "bars" }, bars) : h("span", { class: "dim" }, "no data yet"));
 }
 

@@ -24,7 +24,6 @@ BRANDS: dict[str, set[str]] = {
     "scotiabank": {"scotiabank.com"},
     "cibc": {"cibc.com"},
     "bmo": {"bmo.com"},
-    "waterloo": {"uwaterloo.ca"},
 }
 
 KEYWORDS = {"login", "signin", "secure", "verify", "account", "update", "support",
