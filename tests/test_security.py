@@ -93,7 +93,7 @@ def test_optional_integrations_default_off(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
     s = load()
-    assert s.gemini_api_key is None and s.sentry_dsn is None and s.gemini_model == "gemini-2.5-flash"
+    assert s.gemini_api_key is None and s.sentry_dsn is None and s.gemini_model == "gemini-3.6-flash"
 
 
 def test_optional_integrations_read_from_env(monkeypatch):

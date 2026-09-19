@@ -112,7 +112,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 
 | Variable | Enables |
 |---|---|
-| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-2.5-flash`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
+| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-3.6-flash`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
 | `SENTRY_DSN` | Exception capture and light performance tracing for the pipeline, investigator and API (`send_default_pii=False`) |
 
 ## Layout
