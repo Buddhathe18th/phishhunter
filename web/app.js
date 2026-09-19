@@ -54,6 +54,7 @@ function renderInvestigation(inv) {
   box.replaceChildren(
     h("div", { class: "top" }, h("span", { class: "domain" }, inv.domain), h("span", { class: "verdict v-" + inv.verdict }, inv.verdict)),
     h("p", {}, inv.summary),
+    inv.domain_age_days != null ? h("p", { class: "dim" }, `Registered ${inv.domain_age_days.toFixed(1)} days ago (RDAP)`) : null,
     inv.corroboration.length ? h("ul", { class: "reasons" }, inv.corroboration.map(c => h("li", {}, c))) : null,
     inv.agent_summary ? h("div", { class: "lure" }, h("b", {}, AGENT_LABEL[inv.agent_source] || "Analyst"), h("div", {}, inv.agent_summary)) : null,
     ...inv.lures.map(l => h("div", { class: "lure" }, h("b", {}, `[${l.language || "?"}] ${l.type || ""}`), " " + l.snippet)),

@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass, field
 from .actions import ActionEngine, Signals
 from .config import Settings
 from .kibana import Kibana
+from .rdap import lookup_domain_age
 from .report import abuse_report
 from .score import KEYWORDS, score_domain, split_domain, suggest_defensive_domains
 from .security import clean_domain, clean_text
@@ -32,6 +33,7 @@ PLAN = {"suspicious": ["notify"], "likely": ["notify", "block_domain"],
         "confirmed": ["notify", "block_domain", "file_report"]}
 
 GEMINI_MIN_INTERVAL = 15.0  # seconds; keeps a fast demo-mode loop from burning through a free quota
+AGENT_BUILDER_MIN_INTERVAL = 60.0  # seconds; Elastic's trial LLM connector rate-limits (HTTP 429) well before this
 
 
 @dataclass
@@ -48,6 +50,7 @@ class Investigation:
     page: dict | None = None
     agent_summary: str | None = None
     agent_source: str | None = None  # "agent_builder" or "gemini", so the UI can credit the right analyst
+    domain_age_days: float | None = None  # None = RDAP lookup unavailable, not "old"
     defensive_suggestions: list[str] = field(default_factory=list)
     actions: list[dict] = field(default_factory=list)
     trace: list[dict] = field(default_factory=list)
@@ -75,6 +78,7 @@ class Investigator:
                  fetch: Callable[[str], Awaitable[PageFacts]] = fetch_page) -> None:
         self.store, self.engine, self.settings, self.kibana, self.fetch = store, engine, settings, kibana, fetch
         self._last_gemini_call = 0.0
+        self._last_agent_builder_call = 0.0
 
     # --- signals the policy trusts (recomputed from data, never from model output) ---------------------
     def signals_for(self, domain: str) -> Signals | None:
@@ -88,6 +92,7 @@ class Investigator:
             lure_similar=bool(brand and self.store.search_evidence(lure_query(hit), brand, size=1)),
             campaign_size=sum(r.get("domains", 0) for r in self.store.brand_window(brand, 24)) if brand else 0,
             login_form=hit.get("has_login_form"),
+            domain_age_days=hit.get("domain_age_days"),
         )
 
     def report_for(self, domain: str) -> str | None:
@@ -130,6 +135,14 @@ class Investigator:
             inv.defensive_suggestions = suggest_defensive_domains(inv.brand)
         inv.lookalikes = await asyncio.to_thread(self.store.lookalikes, hit.get("label") or registered, domain, 5)
         tool("find_lookalikes", f"{len(inv.lookalikes)} similar flagged domains")
+
+        rdap = await asyncio.to_thread(lookup_domain_age, registered)
+        if rdap.age_days is not None:
+            inv.domain_age_days = rdap.age_days
+            await asyncio.to_thread(self.store.upsert_hit, domain, {"domain_age_days": rdap.age_days})
+            tool("rdap_lookup", f"registered {rdap.age_days:.1f} days ago ({rdap.registered_at})")
+        else:
+            tool("rdap_lookup", f"unavailable ({rdap.error})")
 
         if self.settings.triage_fetch:
             await self._triage(domain, inv, tool)
@@ -193,6 +206,15 @@ class Investigator:
         return None, None
 
     async def _ask_agent_builder(self, domain: str, tool: Callable[[str, str], None]) -> str | None:
+        """Rate-limited application-wide: Elastic's trial LLM connector returns HTTP 429 well before a fast
+        demo-mode loop would naturally space calls out on its own.
+        """
+        now = time.monotonic()
+        if now - self._last_agent_builder_call < AGENT_BUILDER_MIN_INTERVAL:
+            tool("agent_builder", "skipped (rate-limited to avoid the connector's 429s)")
+            return None
+        self._last_agent_builder_call = now
+
         prompt = (f"Investigate the domain {domain}. Use your tools to check the certificate hit, similar lures, "
                   "lookalike domains and recent campaign clusters, then give a verdict with the key evidence.")
         try:

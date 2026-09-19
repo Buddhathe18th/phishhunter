@@ -15,6 +15,7 @@ the contents of phishing web pages. The design assumes all of it is hostile.
 | Malicious domain names (header/newline injection, odd characters) | `clean_domain` allow-list validation before anything is stored, queried, reported or written to disk |
 | Query injection into Elasticsearch | Values travel only as ES\|QL `?params` or query-DSL values, never concatenated; strict index mappings (`dynamic: strict`) |
 | SSRF via the page-triage fetch | Off by default; DNS resolved once, every address must be globally routable, connection pinned to the vetted IP, redirects re-validated, ports 80/443 only, size/time caps, no cookies |
+| SSRF via the RDAP domain-age lookup | The server queried comes only from IANA's own bootstrap registry, keyed by TLD, never from anything attacker-controlled; the domain itself is already `clean_domain`-validated before it reaches the URL path |
 | Prompt injection via lures/pages reaching the LLM agent (Agent Builder, or the Gemini fallback when Kibana isn't configured) | Both are told content is untrusted data; Agent Builder has read-only tools, the Gemini fallback gets a fixed evidence snapshot with no tool access at all; either way they can only *propose* actions, and a deterministic policy gate (not the model) decides what runs |
 | Runaway or malicious autonomy | Unattended actions are off by default; even when on, require score ≥ threshold **and** ≥ 2 independent corroborating signals recomputed from data; third-party actions always need a human; a human rejection permanently blocks auto-action on that domain |
 | XSS in the dashboard | No `innerHTML`; all server strings rendered with `textContent`; CSP forbids inline script/style and external sources |
@@ -49,9 +50,12 @@ never sends takedown requests on its own: reports are written to a local outbox 
 - Verified against a live Elasticsearch 9.6.0 node and a live Kibana: mappings, real Jina hybrid retrieval (BM25 +
   vector + rerank), ES|QL, actions, and Agent Builder tool/agent registration + `converse` (a real investigation
   takes 30-45s end to end - Agent Builder reasoning over its own tools is not instant, and the dashboard reflects
-  it asynchronously rather than blocking the request that flagged the domain). The workflow-tool registration
-  (`--workflow-id`) still follows an undocumented shape and hasn't been exercised live; it fails closed either way
-  (the app degrades to the deterministic playbook) and reports the error clearly.
+  it asynchronously rather than blocking the request that flagged the domain). Elastic's trial LLM connector
+  returns HTTP 429 well before a fast demo loop would naturally space calls out on its own, so `converse` is
+  rate-limited to one call per 60 seconds application-wide; when it's skipped or fails, the Gemini fallback still
+  runs. The workflow-tool registration (`--workflow-id`) still follows an undocumented shape and hasn't been
+  exercised live; it fails closed either way (the app degrades to the deterministic playbook) and reports the
+  error clearly.
 - The Gemini fallback analyst (`GEMINI_API_KEY`, used only when Agent Builder is unset or errors) is a single
   grounded completion over evidence already gathered, not a tool-calling loop. Verified against the real Gemini
   API; rate-limited to one call per 15 seconds application-wide so a fast demo loop doesn't burn through a free
@@ -59,3 +63,6 @@ never sends takedown requests on its own: reports are written to a local outbox 
   full lure text beyond what `_lure` already caps at 220 characters.
 - Sentry (`SENTRY_DSN`, off by default) receives exception type/stack traces and basic performance spans if
   configured; `send_default_pii=False` is set explicitly and no domain, lure or evidence text is added to events.
+- RDAP coverage depends on the registry: some TLDs don't run an RDAP server, and it always fails closed to "no
+  signal" rather than treating a lookup failure as suspicious. Verified live against real `.com` and `.ca` RDAP
+  servers.

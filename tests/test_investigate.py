@@ -92,6 +92,29 @@ def test_agent_builder_failure_degrades_gracefully(store, settings):
     assert any("unavailable" in t["result"] for t in inv.trace if t["tool"] == "agent_builder")
 
 
+def test_agent_builder_rate_limited_falls_back_to_gemini(store, settings, monkeypatch):
+    """Elastic's trial LLM connector 429s well before a fast loop would naturally space calls out."""
+    add_hit(store, BAD)
+    add_hit(store, "rbc-signin-secure.online")
+    engine, _ = make_engine(store, settings, gemini_api_key="test-key")
+
+    class Working:
+        def converse(self, *a, **k):
+            return "agent builder verdict"
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            return type("Resp", (), {"text": "gemini note"})()
+
+    monkeypatch.setattr("google.genai.Client", lambda api_key=None: type("C", (), {"models": FakeModels()})())
+    investigator = Investigator(store, engine, replace(settings, gemini_api_key="test-key"), kibana=Working())
+    first = run(investigator.run(BAD))
+    second = run(investigator.run("rbc-signin-secure.online"))
+    assert first.agent_source == "agent_builder"
+    assert second.agent_source == "gemini" and second.agent_summary == "gemini note"
+    assert any("rate-limited" in t["result"] for t in second.trace if t["tool"] == "agent_builder")
+
+
 def test_no_analyst_note_without_kibana_or_gemini(store, settings):
     add_hit(store, BAD)
     _, investigator = make_engine(store, settings)
@@ -156,6 +179,41 @@ def test_gemini_never_called_when_kibana_succeeds(store, settings, monkeypatch):
     investigator = Investigator(store, engine, _replace(settings, gemini_api_key="test-key"), kibana=Working())
     inv = run(investigator.run(BAD))
     assert inv.agent_source == "agent_builder" and inv.agent_summary == "agent builder verdict"
+
+
+def test_young_domain_is_a_corroborating_signal(store, settings, monkeypatch):
+    from src.rdap import RdapResult
+
+    add_hit(store, BAD)
+    monkeypatch.setattr("src.investigate.lookup_domain_age",
+                         lambda domain: RdapResult(registered_at="2026-09-19T00:00:00Z", age_days=2.0))
+    _, investigator = make_engine(store, settings)
+    inv = run(investigator.run(BAD))
+    assert inv.domain_age_days == 2.0
+    assert any("registered only" in c for c in inv.corroboration)
+    assert any(t["tool"] == "rdap_lookup" and "2.0 days" in t["result"] for t in inv.trace)
+
+
+def test_old_domain_is_not_a_corroborating_signal(store, settings, monkeypatch):
+    from src.rdap import RdapResult
+
+    add_hit(store, BAD)
+    monkeypatch.setattr("src.investigate.lookup_domain_age",
+                         lambda domain: RdapResult(registered_at="2015-01-01T00:00:00Z", age_days=4000.0))
+    _, investigator = make_engine(store, settings)
+    inv = run(investigator.run(BAD))
+    assert inv.domain_age_days == 4000.0
+    assert not any("registered only" in c for c in inv.corroboration)
+
+
+def test_rdap_failure_does_not_affect_verdict(store, settings):
+    """The autouse fixture already fakes RDAP as unavailable; the investigation must still work normally."""
+    add_hit(store, BAD)
+    _, investigator = make_engine(store, settings)
+    inv = run(investigator.run(BAD))
+    assert inv.domain_age_days is None
+    assert not any("registered only" in c for c in inv.corroboration)
+    assert inv.verdict in {"likely", "confirmed"}
 
 
 def test_defensive_suggestions_attached_for_known_brand(store, settings):

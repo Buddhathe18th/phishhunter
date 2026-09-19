@@ -32,7 +32,9 @@ If Agent Builder isn't available, the write-up falls back to a grounded Gemini c
 - either way it's narrative only, and the dashboard credits whichever one answered.
 
 The dashboard also clusters flagged domains into campaigns, and suggests lookalikes nobody's registered yet for any
-recognised brand - the scorer run in reverse, so a defender has something to watch pre-emptively.
+recognised brand - the scorer run in reverse, so a defender has something to watch pre-emptively. It also looks up
+each domain's actual registration date via RDAP, no API key needed, since a domain registered minutes before its
+certificate was issued is a stronger signal than the certificate alone.
 
 ## Quick start (no cluster needed)
 
@@ -102,6 +104,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 | `src/investigate.py` | Investigator: evidence, signals, verdict, proposals (Agent Builder `converse`, Gemini fallback) |
 | `src/actions.py` | Policy gate, approval workflow, executors, audit trail |
 | `src/triage.py` | SSRF-hardened page fetch and HTML fact extraction |
+| `src/rdap.py` | Domain-age lookup via IANA's RDAP bootstrap, no API key |
 | `src/kibana.py`, `src/setup_elastic.py` | Agent Builder client and one-shot setup |
 | `src/api.py`, `src/security.py`, `src/config.py` | API, security primitives, settings |
 | `elastic/workflows/` | Elastic Workflow definitions |

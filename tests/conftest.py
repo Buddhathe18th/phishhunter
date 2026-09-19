@@ -2,14 +2,24 @@ from dataclasses import replace
 
 import pytest
 
+from src import investigate
 from src.actions import ActionEngine
 from src.config import Settings
 from src.investigate import Investigator
+from src.rdap import RdapResult
 from src.score import score_domain
 from src.seed import seed
 from src.store import MemoryStore, hit_doc
 
 TOKEN = "t" * 32
+
+
+@pytest.fixture(autouse=True)
+def no_real_rdap_calls(monkeypatch):
+    """RDAP hits real registry servers over the network; tests get a fast, offline no-op by default.
+    Tests that care about the domain-age signal specifically monkeypatch this again with a real value.
+    """
+    monkeypatch.setattr(investigate, "lookup_domain_age", lambda domain: RdapResult(error="disabled in tests"))
 
 
 @pytest.fixture

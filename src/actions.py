@@ -25,6 +25,9 @@ KINDS = AUTO_KINDS | HUMAN_KINDS
 OPEN_STATUSES = {"proposed", "pending_approval", "executed"}
 
 
+YOUNG_DOMAIN_DAYS = 7  # a domain registered this recently is itself a signal, independent of the scorer
+
+
 @dataclass
 class Signals:
     score: int
@@ -32,6 +35,7 @@ class Signals:
     lure_similar: bool = False      # evidence for the same brand matched by hybrid search
     campaign_size: int = 0          # other flagged domains for the same brand in the last 24h
     login_form: bool | None = None  # None = page not fetched
+    domain_age_days: float | None = None  # None = RDAP lookup unavailable/failed, not "old"
 
     def corroboration(self) -> list[str]:
         found = []
@@ -43,6 +47,8 @@ class Signals:
             found.append(f"part of a burst of {self.campaign_size} lookalike domains")
         if self.login_form:
             found.append("live page has a password form")
+        if self.domain_age_days is not None and self.domain_age_days < YOUNG_DOMAIN_DAYS:
+            found.append(f"domain registered only {self.domain_age_days:.1f} days ago")
         return found
 
 
