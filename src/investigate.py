@@ -77,8 +77,10 @@ class Investigator:
     def __init__(self, store: Store, engine: ActionEngine, settings: Settings, kibana: Kibana | None = None,
                  fetch: Callable[[str], Awaitable[PageFacts]] = fetch_page) -> None:
         self.store, self.engine, self.settings, self.kibana, self.fetch = store, engine, settings, kibana, fetch
-        self._last_gemini_call = 0.0
-        self._last_agent_builder_call = 0.0
+        # None, not 0.0: time.monotonic()'s reference point is system-dependent (often boot time), so a fresh
+        # container can legitimately report a small elapsed time and make 0.0 look like "within the window".
+        self._last_gemini_call: float | None = None
+        self._last_agent_builder_call: float | None = None
 
     # --- signals the policy trusts (recomputed from data, never from model output) ---------------------
     def signals_for(self, domain: str) -> Signals | None:
@@ -210,7 +212,7 @@ class Investigator:
         demo-mode loop would naturally space calls out on its own.
         """
         now = time.monotonic()
-        if now - self._last_agent_builder_call < AGENT_BUILDER_MIN_INTERVAL:
+        if self._last_agent_builder_call is not None and now - self._last_agent_builder_call < AGENT_BUILDER_MIN_INTERVAL:
             tool("agent_builder", "skipped (rate-limited to avoid the connector's 429s)")
             return None
         self._last_agent_builder_call = now
@@ -233,7 +235,7 @@ class Investigator:
         free-tier quota does not survive that kind of burst.
         """
         now = time.monotonic()
-        if now - self._last_gemini_call < GEMINI_MIN_INTERVAL:
+        if self._last_gemini_call is not None and now - self._last_gemini_call < GEMINI_MIN_INTERVAL:
             tool("gemini_analyst", "skipped (rate-limited to protect the free quota)")
             return None
         self._last_gemini_call = now

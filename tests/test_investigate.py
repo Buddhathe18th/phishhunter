@@ -92,6 +92,25 @@ def test_agent_builder_failure_degrades_gracefully(store, settings):
     assert any("unavailable" in t["result"] for t in inv.trace if t["tool"] == "agent_builder")
 
 
+def test_first_call_never_rate_limited_even_on_a_freshly_booted_clock(store, settings, monkeypatch):
+    """time.monotonic()'s reference point is system-dependent - on a freshly booted container it can report a
+    small elapsed time. A fresh Investigator's very first Gemini/Agent Builder call must never be rate-limited
+    just because that number happens to be smaller than the cooldown window.
+    """
+    add_hit(store, BAD)
+    monkeypatch.setattr("src.investigate.time.monotonic", lambda: 5.0)  # smaller than either MIN_INTERVAL
+
+    class Working:
+        def converse(self, *a, **k):
+            return "agent builder verdict"
+
+    _, investigator = make_engine(store, settings)
+    investigator.kibana = Working()
+    inv = run(investigator.run(BAD))
+    assert inv.agent_source == "agent_builder"
+    assert not any("rate-limited" in t["result"] for t in inv.trace if t["tool"] == "agent_builder")
+
+
 def test_agent_builder_rate_limited_falls_back_to_gemini(store, settings, monkeypatch):
     """Elastic's trial LLM connector 429s well before a fast loop would naturally space calls out."""
     add_hit(store, BAD)
