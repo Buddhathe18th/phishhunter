@@ -121,9 +121,10 @@ CI installs from the hash-pinned `requirements*.lock` files. To refresh them:
 
 ## Status
 
-Verified live: Elasticsearch 9.5.1 (mappings, search, ES|QL, the full investigate → propose → approve loop), the
-real Gemini API, and real Sentry event capture. Not yet verified: Kibana Agent Builder registration/`converse`
-(no Kibana available yet) and the real Jina API. Known limitations: [SECURITY.md](SECURITY.md#known-limitations).
+Everything in this project is verified against the real thing, not a stand-in: Elasticsearch 9.6.0, real Jina
+hybrid retrieval (BM25 + vector + rerank), the real Kibana Agent Builder (`converse`, using its own registered
+tools), the real Gemini API, and real Sentry event capture. Known limitations:
+[SECURITY.md](SECURITY.md#known-limitations).
 
 ## License
 

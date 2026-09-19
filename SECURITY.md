@@ -46,14 +46,16 @@ never sends takedown requests on its own: reports are written to a local outbox 
   article - scores high enough to flag on that signal alone. This is a precision tradeoff, not an oversight:
   it's the actual reason every action requires human approval rather than running unattended.
 - The in-memory demo store has lexical search only; cross-language matching needs the Elastic + Jina path.
-- Verified against a live Elasticsearch 9.5.1 node: mappings, hybrid retrieval, ES|QL, actions. **Not** verified
-  against a live Kibana: the Agent Builder tool/agent registration and `converse` call follow Elastic's documented
-  API, and the workflow-tool registration (`--workflow-id`) follows an undocumented shape. Both fail closed (the
-  app degrades to the deterministic playbook) and report the error clearly.
-- Jina embeddings/reranker were exercised through a local stand-in, not the real Jina API.
-- The Gemini fallback analyst (`GEMINI_API_KEY`, used only when `KIBANA_URL` is unset or Agent Builder errors) is a
-  single grounded completion over evidence already gathered, not a tool-calling loop, and was tested against a mocked
-  client, not the live Gemini API. Sends the flagged domain, brand, score and lure snippets already stored locally;
-  no raw page content or full lure text beyond what `_lure` already caps at 220 characters.
+- Verified against a live Elasticsearch 9.6.0 node and a live Kibana: mappings, real Jina hybrid retrieval (BM25 +
+  vector + rerank), ES|QL, actions, and Agent Builder tool/agent registration + `converse` (a real investigation
+  takes 30-45s end to end - Agent Builder reasoning over its own tools is not instant, and the dashboard reflects
+  it asynchronously rather than blocking the request that flagged the domain). The workflow-tool registration
+  (`--workflow-id`) still follows an undocumented shape and hasn't been exercised live; it fails closed either way
+  (the app degrades to the deterministic playbook) and reports the error clearly.
+- The Gemini fallback analyst (`GEMINI_API_KEY`, used only when Agent Builder is unset or errors) is a single
+  grounded completion over evidence already gathered, not a tool-calling loop. Verified against the real Gemini
+  API; rate-limited to one call per 15 seconds application-wide so a fast demo loop doesn't burn through a free
+  quota. Sends the flagged domain, brand, score and lure snippets already stored locally; no raw page content or
+  full lure text beyond what `_lure` already caps at 220 characters.
 - Sentry (`SENTRY_DSN`, off by default) receives exception type/stack traces and basic performance spans if
   configured; `send_default_pii=False` is set explicitly and no domain, lure or evidence text is added to events.
