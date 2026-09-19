@@ -90,16 +90,16 @@ def test_generated_token_when_unset(monkeypatch):
 
 
 def test_optional_integrations_default_off(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
     s = load()
-    assert s.openai_api_key is None and s.sentry_dsn is None and s.openai_model == "gpt-4o-mini"
+    assert s.gemini_api_key is None and s.sentry_dsn is None and s.gemini_model == "gemini-2.5-flash"
 
 
 def test_optional_integrations_read_from_env(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
+    monkeypatch.setenv("GEMINI_API_KEY", "gm-test")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
     monkeypatch.setenv("SENTRY_DSN", "https://public@o0.ingest.sentry.io/1")
     s = load()
-    assert s.openai_api_key == "sk-test" and s.openai_model == "gpt-4o" and s.sentry_dsn is not None
-    assert "sk-test" not in repr(s)  # secrets stay out of repr, same guarantee as the other keys
+    assert s.gemini_api_key == "gm-test" and s.gemini_model == "gemini-2.0-flash" and s.sentry_dsn is not None
+    assert "gm-test" not in repr(s)  # secrets stay out of repr, same guarantee as the other keys

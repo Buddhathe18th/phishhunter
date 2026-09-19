@@ -80,8 +80,8 @@ class Settings:
     webhook_url: str | None = field(default=None, repr=False)
     outbox_dir: str = "outbox"
     # --- optional integrations (all no-ops when unset) ---
-    openai_api_key: str | None = field(default=None, repr=False)
-    openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str | None = field(default=None, repr=False)
+    gemini_model: str = "gemini-2.5-flash"
     sentry_dsn: str | None = field(default=None, repr=False)
 
 
@@ -122,7 +122,7 @@ def load() -> Settings:
         auto_score=_int("AUTO_SCORE", 85, 1, 100),
         webhook_url=_url("ACTION_WEBHOOK_URL"),
         outbox_dir=os.getenv("OUTBOX_DIR", "outbox"),
-        openai_api_key=_secret("OPENAI_API_KEY"),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        gemini_api_key=_secret("GEMINI_API_KEY"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         sentry_dsn=_secret("SENTRY_DSN"),
     )

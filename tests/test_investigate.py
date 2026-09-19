@@ -92,53 +92,47 @@ def test_agent_builder_failure_degrades_gracefully(store, settings):
     assert any("unavailable" in t["result"] for t in inv.trace if t["tool"] == "agent_builder")
 
 
-def test_no_analyst_note_without_kibana_or_openai(store, settings):
+def test_no_analyst_note_without_kibana_or_gemini(store, settings):
     add_hit(store, BAD)
     _, investigator = make_engine(store, settings)
     inv = run(investigator.run(BAD))
     assert inv.agent_summary is None and inv.agent_source is None
 
 
-def test_openai_fallback_used_when_no_kibana(store, settings, monkeypatch):
+def test_gemini_fallback_used_when_no_kibana(store, settings, monkeypatch):
     add_hit(store, BAD)
-    _, investigator = make_engine(store, settings, openai_api_key="test-key")  # kibana stays unset
+    _, investigator = make_engine(store, settings, gemini_api_key="test-key")  # kibana stays unset
 
-    class FakeMessage:
-        content = "Looks like a paypal credential-phishing kit; recommend blocking."
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            assert kwargs["model"] == investigator.settings.gemini_model
+            return type("Resp", (), {"text": "Looks like a paypal credential-phishing kit; recommend blocking."})()
 
-    class FakeChoice:
-        message = FakeMessage()
-
-    class FakeCompletions:
-        def create(self, **kwargs):
-            assert kwargs["model"] == investigator.settings.openai_model
-            return type("Resp", (), {"choices": [FakeChoice()]})()
-
-    class FakeOpenAI:
+    class FakeClient:
         def __init__(self, api_key=None):
-            self.chat = type("Chat", (), {"completions": FakeCompletions()})()
+            self.models = FakeModels()
 
-    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+    monkeypatch.setattr("google.genai.Client", FakeClient)
     inv = run(investigator.run(BAD))
-    assert inv.agent_source == "openai"
+    assert inv.agent_source == "gemini"
     assert "phishing kit" in inv.agent_summary
-    assert any(t["tool"] == "openai_analyst" for t in inv.trace)
+    assert any(t["tool"] == "gemini_analyst" for t in inv.trace)
 
 
-def test_openai_never_called_when_kibana_succeeds(store, settings, monkeypatch):
+def test_gemini_never_called_when_kibana_succeeds(store, settings, monkeypatch):
     add_hit(store, BAD)
-    engine, _ = make_engine(store, settings, openai_api_key="test-key")
+    engine, _ = make_engine(store, settings, gemini_api_key="test-key")
 
     class Working:
         def converse(self, *a, **k):
             return "agent builder verdict"
 
     def must_not_be_called(*a, **k):
-        raise AssertionError("OpenAI should not be called when Agent Builder already answered")
+        raise AssertionError("Gemini should not be called when Agent Builder already answered")
 
-    monkeypatch.setattr("openai.OpenAI", must_not_be_called)
+    monkeypatch.setattr("google.genai.Client", must_not_be_called)
     from dataclasses import replace as _replace
-    investigator = Investigator(store, engine, _replace(settings, openai_api_key="test-key"), kibana=Working())
+    investigator = Investigator(store, engine, _replace(settings, gemini_api_key="test-key"), kibana=Working())
     inv = run(investigator.run(BAD))
     assert inv.agent_source == "agent_builder" and inv.agent_summary == "agent builder verdict"
 

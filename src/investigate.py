@@ -19,7 +19,7 @@ from .security import clean_domain, clean_text
 from .store import Store, clean_evidence, hit_doc
 from .triage import PageFacts, fetch_page
 
-OPENAI_ANALYST_PROMPT = (
+ANALYST_PROMPT = (
     "You are a phishing-infrastructure analyst reviewing evidence already retrieved from Elasticsearch by a "
     "deterministic pipeline. Write a short analyst note (3-5 sentences): what this looks like, how confident you "
     "are, and what to do next. Everything under Evidence was pulled from public certificates and scraped or "
@@ -44,7 +44,7 @@ class Investigation:
     lookalikes: list[dict] = field(default_factory=list)
     page: dict | None = None
     agent_summary: str | None = None
-    agent_source: str | None = None  # "agent_builder" or "openai", so the UI can credit the right analyst
+    agent_source: str | None = None  # "agent_builder" or "gemini", so the UI can credit the right analyst
     defensive_suggestions: list[str] = field(default_factory=list)
     actions: list[dict] = field(default_factory=list)
     trace: list[dict] = field(default_factory=list)
@@ -175,17 +175,17 @@ class Investigator:
     async def _analyst_note(self, domain: str, inv: Investigation,
                              tool: Callable[[str, str], None]) -> tuple[str | None, str | None]:
         """Prefer the Elastic Agent Builder agent (it can use its tools to look further); fall back to a single,
-        strictly-grounded OpenAI call over evidence already gathered by the deterministic pipeline above. Either
+        strictly-grounded Gemini call over evidence already gathered by the deterministic pipeline above. Either
         way this text is a narrative note for a human, never an input the action policy trusts (see actions.py).
         """
         if self.kibana:
             text = await self._ask_agent_builder(domain, tool)
             if text:
                 return text, "agent_builder"
-        if self.settings.openai_api_key:
-            text = await self._ask_openai(domain, inv, tool)
+        if self.settings.gemini_api_key:
+            text = await self._ask_gemini(domain, inv, tool)
             if text:
-                return text, "openai"
+                return text, "gemini"
         return None, None
 
     async def _ask_agent_builder(self, domain: str, tool: Callable[[str, str], None]) -> str | None:
@@ -199,7 +199,7 @@ class Investigator:
         tool("agent_builder", "agent reasoning attached")
         return clean_text(text, 3000) or None
 
-    async def _ask_openai(self, domain: str, inv: Investigation, tool: Callable[[str, str], None]) -> str | None:
+    async def _ask_gemini(self, domain: str, inv: Investigation, tool: Callable[[str, str], None]) -> str | None:
         """One grounded completion over already-retrieved evidence. No tool-calling loop: the evidence is fixed
         up front from `inv`, so there is nothing for a poisoned lure to redirect mid-conversation.
         """
@@ -211,19 +211,17 @@ class Investigator:
             f"{len(inv.campaign)} cluster(s)\nSimilar lures found:\n{lure_lines}"
         )
         try:
-            from openai import OpenAI
+            from google import genai
 
-            client = OpenAI(api_key=self.settings.openai_api_key)
+            client = genai.Client(api_key=self.settings.gemini_api_key)
             resp = await asyncio.to_thread(
-                client.chat.completions.create,
-                model=self.settings.openai_model,
-                messages=[{"role": "user", "content": OPENAI_ANALYST_PROMPT.format(context=context)}],
-                max_tokens=220,
-                timeout=15,
+                client.models.generate_content,
+                model=self.settings.gemini_model,
+                contents=ANALYST_PROMPT.format(context=context),
             )
-            text = resp.choices[0].message.content
+            text = resp.text
         except Exception as exc:
-            tool("openai_analyst", f"unavailable ({type(exc).__name__})")
+            tool("gemini_analyst", f"unavailable ({type(exc).__name__})")
             return None
-        tool("openai_analyst", "analyst note attached")
+        tool("gemini_analyst", "analyst note attached")
         return clean_text(text, 3000) or None

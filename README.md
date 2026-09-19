@@ -31,7 +31,7 @@ The LLM agent can only propose an action. Whether it actually runs unattended co
 against signals recomputed from the data, not anything the agent says, so a poisoned lure or page can't talk its
 way into a takedown.
 
-If `KIBANA_URL` isn't set (or Agent Builder errors), the analyst write-up falls back to a direct OpenAI call
+If `KIBANA_URL` isn't set (or Agent Builder errors), the analyst write-up falls back to a direct Gemini call
 grounded only in evidence the deterministic pipeline already gathered - no tool access, so there's nothing for a
 poisoned lure to redirect. Either source is narrative only; the dashboard credits whichever one actually answered.
 
@@ -112,7 +112,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 
 | Variable | Enables |
 |---|---|
-| `OPENAI_API_KEY` (+ optional `OPENAI_MODEL`, default `gpt-4o-mini`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
+| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-2.5-flash`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
 | `SENTRY_DSN` | Exception capture and light performance tracing for the pipeline, investigator and API (`send_default_pii=False`) |
 
 ## Layout
@@ -123,7 +123,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 | `src/score.py` | Explainable lookalike scoring (every point has a reason) + defensive-domain suggestions |
 | `src/esq.py` | Index mappings, hybrid retriever and ES\|QL query builders |
 | `src/store.py` | `ElasticStore` and an in-memory `MemoryStore` with the same interface |
-| `src/investigate.py` | Investigator: evidence, signals, verdict, proposals (Agent Builder `converse`, OpenAI fallback) |
+| `src/investigate.py` | Investigator: evidence, signals, verdict, proposals (Agent Builder `converse`, Gemini fallback) |
 | `src/actions.py` | Policy gate, approval workflow, executors, audit trail |
 | `src/triage.py` | SSRF-hardened page fetch and HTML fact extraction |
 | `src/kibana.py`, `src/setup_elastic.py` | Agent Builder client and one-shot setup |
@@ -148,7 +148,7 @@ CI installs from the hash-pinned `requirements*.lock` files. To refresh them:
 Verified against a live Elasticsearch 9.5.1 node: mappings, ngram/fuzzy search, ES|QL, hybrid RRF + rerank
 retrieval (through a local stand-in for Jina), and the full investigate → propose → approve loop. Not verified:
 the Kibana Agent Builder registration and `converse` calls (no Kibana was available), the real Jina API, and the
-OpenAI fallback against the live OpenAI API (tested against a mocked client). See
+Gemini fallback against the live Gemini API (tested against a mocked client). See
 [SECURITY.md](SECURITY.md#known-limitations) for known limitations. The lure corpus is synthetic, and the public
 CertStream server goes down sometimes, so use `DEMO=1` if it is.
 

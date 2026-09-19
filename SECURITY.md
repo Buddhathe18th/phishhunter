@@ -15,7 +15,7 @@ the contents of phishing web pages. The design assumes all of it is hostile.
 | Malicious domain names (header/newline injection, odd characters) | `clean_domain` allow-list validation before anything is stored, queried, reported or written to disk |
 | Query injection into Elasticsearch | Values travel only as ES\|QL `?params` or query-DSL values, never concatenated; strict index mappings (`dynamic: strict`) |
 | SSRF via the page-triage fetch | Off by default; DNS resolved once, every address must be globally routable, connection pinned to the vetted IP, redirects re-validated, ports 80/443 only, size/time caps, no cookies |
-| Prompt injection via lures/pages reaching the LLM agent (Agent Builder, or the OpenAI fallback when Kibana isn't configured) | Both are told content is untrusted data; Agent Builder has read-only tools, the OpenAI fallback gets a fixed evidence snapshot with no tool access at all; either way they can only *propose* actions, and a deterministic policy gate (not the model) decides what runs |
+| Prompt injection via lures/pages reaching the LLM agent (Agent Builder, or the Gemini fallback when Kibana isn't configured) | Both are told content is untrusted data; Agent Builder has read-only tools, the Gemini fallback gets a fixed evidence snapshot with no tool access at all; either way they can only *propose* actions, and a deterministic policy gate (not the model) decides what runs |
 | Runaway or malicious autonomy | Unattended actions are off by default; even when on, require score ≥ threshold **and** ≥ 2 independent corroborating signals recomputed from data; third-party actions always need a human; a human rejection permanently blocks auto-action on that domain |
 | XSS in the dashboard | No `innerHTML`; all server strings rendered with `textContent`; CSP forbids inline script/style and external sources |
 | Unauthorised API/WebSocket use | Bearer token (constant-time compare) on every data route; WebSocket auth via first message (never a URL), origin check, client cap |
@@ -51,9 +51,9 @@ never sends takedown requests on its own: reports are written to a local outbox 
   API, and the workflow-tool registration (`--workflow-id`) follows an undocumented shape. Both fail closed (the
   app degrades to the deterministic playbook) and report the error clearly.
 - Jina embeddings/reranker were exercised through a local stand-in, not the real Jina API.
-- The OpenAI fallback analyst (`OPENAI_API_KEY`, used only when `KIBANA_URL` is unset or Agent Builder errors) is a
+- The Gemini fallback analyst (`GEMINI_API_KEY`, used only when `KIBANA_URL` is unset or Agent Builder errors) is a
   single grounded completion over evidence already gathered, not a tool-calling loop, and was tested against a mocked
-  client, not the live OpenAI API. Sends the flagged domain, brand, score and lure snippets already stored locally;
+  client, not the live Gemini API. Sends the flagged domain, brand, score and lure snippets already stored locally;
   no raw page content or full lure text beyond what `_lure` already caps at 220 characters.
 - Sentry (`SENTRY_DSN`, off by default) receives exception type/stack traces and basic performance spans if
   configured; `send_default_pii=False` is set explicitly and no domain, lure or evidence text is added to events.

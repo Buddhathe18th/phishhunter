@@ -46,7 +46,7 @@ function renderHit(d, prepend = true) {
   while (feed.children.length > 60) feed.lastChild.remove();
 }
 
-const AGENT_LABEL = { agent_builder: "Agent Builder analyst", openai: "OpenAI analyst" };
+const AGENT_LABEL = { agent_builder: "Agent Builder analyst", gemini: "Gemini analyst" };
 
 function renderInvestigation(inv) {
   const box = $("investigation");
