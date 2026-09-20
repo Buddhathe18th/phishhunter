@@ -20,6 +20,7 @@ the contents of phishing web pages. The design assumes all of it is hostile.
 | Runaway or malicious autonomy | Unattended actions are off by default; even when on, require score ≥ threshold **and** ≥ 2 independent corroborating signals recomputed from data; third-party actions always need a human; a human rejection permanently blocks auto-action on that domain |
 | XSS in the dashboard | No `innerHTML`; all server strings rendered with `textContent`; CSP forbids inline script/style and external sources |
 | Unauthorised API/WebSocket use | Bearer token (constant-time compare) on every data route; WebSocket auth via first message (never a URL), origin check, client cap |
+| Abuse of the public, token-free `/api/check` | Rate-limited tighter than authenticated routes (no login barrier at all); pure computation over `clean_domain`-validated input, no external calls, no read or write to any store, so there's nothing to exfiltrate or corrupt even under heavy abuse |
 | DNS rebinding / host-header attacks against a local server | `TrustedHostMiddleware` allow-list; binds to loopback by default |
 | Abuse / DoS | Per-client rate limits (stricter for POSTs), body-size caps, chunked uploads refused, bounded queues |
 | Secret leakage | Secrets only from environment; excluded from `repr`; never logged; `.env` git-ignored; GitHub secret scanning + push protection enabled |

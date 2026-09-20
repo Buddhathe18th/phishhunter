@@ -36,6 +36,10 @@ recognised brand - the scorer run in reverse, so a defender has something to wat
 each domain's actual registration date via RDAP, no API key needed, since a domain registered minutes before its
 certificate was issued is a stronger signal than the certificate alone.
 
+Everything above is behind the analyst dashboard's login. `/check` is a separate, public page that needs no
+token at all: paste a domain or a link and get an instant answer from the same deterministic scorer, a pure,
+stateless computation with no side effects, so it's safe to leave open to anyone, not just a security team.
+
 ## Quick start (no cluster needed)
 
 ```powershell
@@ -108,7 +112,8 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 | `src/kibana.py`, `src/setup_elastic.py` | Agent Builder client and one-shot setup |
 | `src/api.py`, `src/security.py`, `src/config.py` | API, security primitives, settings |
 | `elastic/workflows/` | Elastic Workflow definitions |
-| `web/` | Dashboard (no inline script/style, strict CSP) |
+| `web/index.html`, `web/app.js` | Analyst dashboard, token-gated (no inline script/style, strict CSP) |
+| `web/check.html`, `web/check.js` | Public `/check` page, no token needed |
 | `scripts/benchmark.py` | Accuracy check against a frozen real-world sample (see Measured accuracy above) |
 
 ## Development

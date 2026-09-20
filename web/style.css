@@ -39,3 +39,10 @@ a { color:var(--link); font-size:13px; }
 .bars span { flex:1; background:var(--dim); opacity:.55; min-height:2px; border-radius:2px 2px 0 0; }
 .bars span.now { background:var(--link); opacity:1; }
 @keyframes in { from { opacity:0; transform:translateY(-6px); } }
+
+.check-wrap { max-width:520px; margin:0 auto; padding:56px 20px; }
+.check-wrap h1 { font-size:26px; margin-bottom:8px; }
+.small { font-size:13px; margin-top:24px; }
+#check-form { display:flex; gap:8px; margin:20px 0; }
+#check-form input { flex:1; min-width:0; }
+.suspicious-result { border-left-color:var(--hi); }

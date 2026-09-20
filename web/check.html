@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doppel - is this a scam?</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="check-page">
+<main class="check-wrap">
+  <h1>Is this link a scam?</h1>
+  <p class="dim">Paste a domain or a link you're not sure about. No account needed, nothing you type is saved.</p>
+  <form id="check-form">
+    <input id="check-input" type="text" autocomplete="off" placeholder="e.g. paypal-secure-login.xyz" aria-label="Domain or link to check" required>
+    <button type="submit">Check it</button>
+  </form>
+  <div id="check-result" class="panel dim" hidden></div>
+  <p class="dim small">This runs the same detection logic behind Doppel, a tool that watches for newly created
+    lookalike domains impersonating real brands. <a href="/">Analyst dashboard</a></p>
+</main>
+<script src="/static/check.js"></script>
+</body>
+</html>

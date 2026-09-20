@@ -38,7 +38,7 @@ def test_post_endpoints_require_token(client):
 
 
 def test_static_page_and_health_are_public_and_carry_security_headers(client):
-    for path in ("/", "/healthz", "/static/app.js"):
+    for path in ("/", "/healthz", "/static/app.js", "/check", "/static/check.js"):
         r = client.get(path)
         assert r.status_code == 200
         assert "script-src 'self'" in r.headers["content-security-policy"]
@@ -48,8 +48,9 @@ def test_static_page_and_health_are_public_and_carry_security_headers(client):
 
 
 def test_no_inline_script_or_style_in_dashboard(client):
-    html = client.get("/").text
-    assert "<script>" not in html and "style=" not in html and "onclick" not in html
+    for path in ("/", "/check"):
+        html = client.get(path).text
+        assert "<script>" not in html and "style=" not in html and "onclick" not in html
 
 
 def test_unknown_host_is_rejected(client):
@@ -106,6 +107,29 @@ def test_simulate_flags_a_fresh_attack_in_demo_mode(client):
     body = r.json()
     assert body["flagged"] is True
     assert client.get("/api/hits", headers=AUTH).json()["stats"]["flagged"] >= 1
+
+
+def test_public_check_needs_no_token(client):
+    r = client.get(f"/api/check?domain={BAD}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["verdict"] == "suspicious" and body["brand"] == "paypal" and body["score"] >= 40
+
+
+def test_public_check_on_a_benign_domain(client):
+    r = client.get("/api/check?domain=github.com")
+    assert r.status_code == 200
+    assert r.json()["verdict"] == "looks fine"
+
+
+def test_public_check_validates_domain(client):
+    assert client.get("/api/check?domain=not a domain").status_code == 422
+
+
+def test_public_check_never_writes_anything(client, store):
+    before = store.recent_hits(100)
+    client.get(f"/api/check?domain=some-random-domain-not-seen-before-{BAD}")
+    assert store.recent_hits(100) == before
 
 
 def test_simulate_live_uses_a_real_fetched_domain(client, monkeypatch):

@@ -191,7 +191,8 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
     @app.middleware("http")
     async def guard(request: Request, call_next):
         client = request.client.host if request.client else "unknown"
-        limiter = heavy if request.method == "POST" else general
+        # /api/check needs no token, so it gets the tight limiter regardless of HTTP method
+        limiter = heavy if request.method == "POST" or request.url.path == "/api/check" else general
         if not limiter.allow(client):
             response = JSONResponse({"detail": "rate limit exceeded"}, status_code=429, headers={"Retry-After": "60"})
         elif request.method == "POST" and not body_size_ok(request):
@@ -218,6 +219,18 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
     @app.get("/healthz")
     def healthz() -> dict:
         return {"ok": True}
+
+    @app.get("/api/check")
+    def check(domain: str) -> dict:
+        """Public, no token needed: the same deterministic scorer the internal pipeline uses, exposed so anyone
+        can check a suspicious link themselves instead of only a security team being able to. Pure computation,
+        no external calls, nothing stored - safe to leave open, and rate-limited tighter than the authenticated
+        routes since it has no login barrier at all.
+        """
+        cleaned = valid_domain(domain)
+        result = score_domain(cleaned)
+        return {"domain": cleaned, "score": result.score, "brand": result.brand, "reasons": result.reasons,
+                "verdict": "suspicious" if result.score >= settings.threshold else "looks fine"}
 
     @app.get("/api/hits", dependencies=[Depends(auth)])
     async def hits() -> dict:
@@ -333,6 +346,10 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
     @app.get("/")
     def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
+
+    @app.get("/check")
+    def check_page() -> FileResponse:
+        return FileResponse(WEB_DIR / "check.html")
 
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
     return app
