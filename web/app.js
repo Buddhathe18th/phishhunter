@@ -95,11 +95,14 @@ async function decide(id, verb) {
   loadActions();
 }
 
+const STATUS_BADGE = { pending_approval: "s-pending", executed: "s-executed", failed: "s-failed", rejected: "s-failed" };
+
 async function loadActions() {
   const { actions, auto } = await (await api("/api/actions")).json();
   $("auto-note").textContent = auto ? "unattended actions ON (policy-gated)" : "unattended actions off - a person approves everything";
   $("actions").replaceChildren(...actions.slice(0, 30).map(a => h("div", { class: "action " + a.status },
-    h("div", {}, h("span", { class: "domain" }, a.domain), h("div", { class: "dim" }, `${a.kind} - ${a.status} - ${a.source}`)),
+    h("div", {}, h("span", { class: "domain" }, a.domain), h("div", { class: "dim" },
+      `${a.kind} - `, h("span", { class: "status-badge " + (STATUS_BADGE[a.status] || "") }, a.status), ` - ${a.source}`)),
     a.status === "pending_approval" ? h("div", { class: "btns" },
       h("button", { on: { click: () => decide(a.id, "approve") } }, "Approve"),
       h("button", { class: "danger", on: { click: () => decide(a.id, "reject") } }, "Reject")) : null)));
@@ -157,6 +160,9 @@ async function simulate(live) {
     const { domain, source } = await (await api(`/api/simulate?live=${live}`, { method: "POST" })).json();
     pendingSimulateDomain = domain;
     btn.textContent = live ? `Pulled ${domain} (${source})` : `Simulated ${domain}`;
+    // Jump straight to investigating it, so the result is the investigation panel filling in with real
+    // evidence, not just a pulsing row somewhere in a feed that keeps scrolling in demo mode.
+    await investigate(domain);
   } catch (e) {
     btn.textContent = e.message.toLowerCase().includes("demo") ? "Only available in demo mode" : label;
   } finally {
