@@ -1,5 +1,6 @@
 :root { --bg:#0e1116; --panel:#171b22; --text:#e6e9ef; --dim:#8b93a1; --hi:#ff4d4f; --mid:#f5a524; --lo:#3fb950; --link:#6cb6ff; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
 header { padding:16px 20px; display:flex; flex-wrap:wrap; gap:8px 24px; align-items:baseline; border-bottom:1px solid #232a34; }
 #simulate { margin-left:auto; }
