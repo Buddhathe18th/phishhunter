@@ -142,8 +142,15 @@ By default Doppel investigates but never acts automatically, a person always app
 
 `file_report` (anything addressed to a third party) always waits for a person, and even then only writes a report
 to `outbox/` for you to submit. Approve or reject pending actions in
-the dashboard. `GET /blocklist.txt` (token required) serves the domains blocked by executed actions as plain text
-you could feed into a firewall or DNS sinkhole. 
+the dashboard. What approving actually does, concretely: `block_domain` adds the domain to `GET /blocklist.txt`
+(token required), a plain-text export you could feed into a firewall or DNS sinkhole, Doppel itself doesn't
+contact anyone or take a domain down. `notify` posts to a configured webhook, or is just recorded if none is set.
+`file_report` drafts a report to `outbox/`. None of them reach outside your own infrastructure by themselves.
+
+This isn't meant to replace a security analyst, and that's deliberate. It automates the research grunt work,
+checking domain age, searching past evidence, reading the live page, writing a first-pass summary, so a person
+reviews a finished case instead of starting from a bare domain name. The actual decision always stays with a
+human.
 
 ## This repo 
 
