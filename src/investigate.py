@@ -7,9 +7,12 @@ available and the source of the signals that the action policy trusts (it never 
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
+
+import sentry_sdk
 
 from .actions import ActionEngine, Signals
 from .config import Settings
@@ -222,6 +225,8 @@ class Investigator:
         try:
             text = await asyncio.to_thread(self.kibana.converse, self.settings.agent_id, prompt)  # type: ignore[union-attr]
         except Exception as exc:
+            print(f"[investigate] agent_builder failed: {exc!r}", file=sys.stderr)
+            sentry_sdk.capture_exception(exc)
             tool("agent_builder", f"unavailable ({type(exc).__name__})")
             return None
         tool("agent_builder", "agent reasoning attached")
@@ -258,6 +263,8 @@ class Investigator:
             )
             text = resp.text
         except Exception as exc:
+            print(f"[investigate] gemini_analyst failed: {exc!r}", file=sys.stderr)
+            sentry_sdk.capture_exception(exc)
             tool("gemini_analyst", f"unavailable ({type(exc).__name__})")
             return None
         tool("gemini_analyst", "analyst note attached")
