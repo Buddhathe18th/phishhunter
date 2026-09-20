@@ -10,9 +10,9 @@ h2 small { text-transform:none; letter-spacing:0; font-weight:400; margin-left:6
 .stat, .dim { color:var(--dim); } .stat b { color:var(--text); font:600 15px ui-monospace, Consolas, monospace; font-variant-numeric:tabular-nums; }
 #login { max-width:420px; margin:48px auto; padding:0 20px; display:grid; gap:10px; }
 #login-fields, #token-fields { display:grid; gap:10px; }
-.login-tabs { display:flex; gap:4px; background:var(--panel); border-radius:6px; padding:3px; }
-.login-tabs .tab { flex:1; background:transparent; color:var(--dim); }
-.login-tabs .tab.active { background:#2b6cb0; color:#fff; }
+.login-tabs { display:flex; gap:20px; border-bottom:1px solid #232a34; margin-bottom:4px; }
+.login-tabs .tab { background:transparent; color:var(--dim); padding:6px 0; border-radius:0; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.login-tabs .tab.active { color:var(--text); border-bottom-color:var(--link); }
 input { background:var(--panel); border:1px solid #2b3340; color:var(--text); padding:10px; border-radius:6px; font:inherit; }
 button { background:#2b6cb0; border:0; color:#fff; padding:8px 14px; border-radius:6px; font:inherit; cursor:pointer; }
 button.danger { background:#9b2c2c; }
