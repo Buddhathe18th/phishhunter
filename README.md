@@ -56,6 +56,22 @@ Open http://127.0.0.1:8000 and paste your `API_TOKEN`. Generate one with
 when the server starts. Demo mode replays canned domains and uses an in-memory store with the bundled synthetic
 lure corpus (`data/lures.jsonl`), so investigations work offline (lexical search only).
 
+## Named accounts
+
+`API_TOKEN` is the admin credential - keep it out of individual analysts' hands. Instead, mint each person their
+own login:
+
+```
+curl -X POST /api/users -H "Authorization: Bearer $API_TOKEN" \
+     -d '{"username": "alex", "password": "..."}'
+```
+
+That returns a personal bearer token. Anyone can also trade a username/password for a fresh token later with
+`POST /api/auth/login` (each login invalidates the previous token for that account). A personal token does
+everything the admin token does except provision more accounts, and every approve/reject in the audit trail is
+now attributed to the real username instead of a generic "dashboard" label. Passwords are hashed with scrypt,
+tokens are stored only as a SHA-256 hash, and there's no token expiry or rotation yet - log in again to rotate.
+
 ## With Elasticsearch
 
 1. Create an Elastic Cloud/serverless deployment + API key (least-privilege for the app; admin for setup).

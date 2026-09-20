@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import secrets
 import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -29,9 +30,20 @@ from .ingest import SIMULATED_ATTACKS, CertEvent, certstream_events, demo_events
 from .investigate import Investigation, Investigator
 from .kibana import Kibana
 from .score import BRANDS, score_domain
-from .security import SECURITY_HEADERS, RateLimiter, clean_domain, clean_text, origin_allowed, token_matches
+from .security import (
+    SECURITY_HEADERS,
+    RateLimiter,
+    clean_domain,
+    clean_text,
+    clean_username,
+    hash_password,
+    hash_token,
+    origin_allowed,
+    token_matches,
+    verify_password,
+)
 from .seed import seed
-from .store import ElasticStore, MemoryStore, Store, clean_evidence, ensure_indices, hit_doc, make_client
+from .store import ElasticStore, MemoryStore, Store, clean_evidence, ensure_indices, hit_doc, make_client, now_iso
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 MAX_BODY = 32 * 1024
@@ -54,6 +66,18 @@ class State:
 class InvestigateReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     domain: str = Field(max_length=253)
+
+
+class CreateUserReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=2, max_length=32)
+    password: str = Field(min_length=12, max_length=200)
+
+
+class LoginReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=2, max_length=32)
+    password: str = Field(min_length=1, max_length=200)
 
 
 class EvidenceReq(BaseModel):
@@ -205,10 +229,18 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
             response.headers["Cache-Control"] = "no-store"
         return response
 
-    def auth(authorization: str | None = Header(default=None)) -> None:
+    def auth(authorization: str | None = Header(default=None)) -> str | None:
+        """Returns the authenticated username, or None for the master/admin token. The master-token check is
+        tried first and is byte-for-byte the same check as before this file grew accounts, so a deployment
+        using only the master token sees no behaviour change at all - the per-user lookup is a pure addition.
+        """
         supplied = authorization[7:] if authorization and authorization.startswith("Bearer ") else None
-        if not token_matches(supplied, settings.api_token):
+        if token_matches(supplied, settings.api_token):
+            return None
+        user = store.find_user_by_token_hash(hash_token(supplied)) if supplied else None
+        if user is None:
             raise HTTPException(401, "missing or invalid token", headers={"WWW-Authenticate": "Bearer"})
+        return user["username"]
 
     def valid_domain(domain: str) -> str:
         cleaned = clean_domain(domain)
@@ -219,6 +251,39 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
     @app.get("/healthz")
     def healthz() -> dict:
         return {"ok": True}
+
+    @app.post("/api/users", status_code=201)
+    async def create_user(req: CreateUserReq, identity: str | None = Depends(auth)) -> dict:
+        """Only the master token can provision named accounts - a per-user token cannot create more users,
+        so a compromised or careless personal account can't be used to mint further access.
+        """
+        if identity is not None:
+            raise HTTPException(403, "only the master token can create accounts")
+        username = clean_username(req.username)
+        if username is None:
+            raise HTTPException(422, "username must be 2-32 chars: lowercase letters, digits, - or _")
+        if await asyncio.to_thread(store.get_user, username) is not None:
+            raise HTTPException(409, "that username is already taken")
+        token = secrets.token_urlsafe(32)
+        salt, pw_hash = hash_password(req.password)
+        await asyncio.to_thread(store.save_user, {
+            "username": username, "password_salt": salt, "password_hash": pw_hash,
+            "token_hash": hash_token(token), "created_at": now_iso(), "created_by": "admin"})
+        return {"username": username, "token": token}
+
+    @app.post("/api/auth/login")
+    async def login(req: LoginReq) -> dict:
+        """Public: trades a username/password for a freshly minted personal bearer token. Rate-limited the
+        same as every other POST (10/min/IP), and scrypt itself is deliberately slow, so a brute-force attempt
+        is expensive on both ends without needing a login-specific limiter.
+        """
+        username = clean_username(req.username)
+        user = await asyncio.to_thread(store.get_user, username) if username else None
+        if user is None or not verify_password(req.password, user["password_salt"], user["password_hash"]):
+            raise HTTPException(401, "wrong username or password")
+        token = secrets.token_urlsafe(32)
+        await asyncio.to_thread(store.save_user, {**user, "token_hash": hash_token(token)})
+        return {"username": username, "token": token}
 
     @app.get("/api/check")
     def check(domain: str) -> dict:
@@ -296,11 +361,11 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
             raise HTTPException(422, "unknown status")
         return {"actions": await asyncio.to_thread(store.list_actions, status, 100), "auto": settings.auto_actions}
 
-    async def decide(action_id: str, verb: Literal["approve", "reject"]) -> dict:
+    async def decide(action_id: str, verb: Literal["approve", "reject"], by: str) -> dict:
         if len(action_id) != 32 or not all(c in "0123456789abcdef" for c in action_id):
             raise HTTPException(422, "bad action id")
         try:
-            action = await asyncio.to_thread(getattr(engine, verb), action_id, "dashboard")
+            action = await asyncio.to_thread(getattr(engine, verb), action_id, by)
         except KeyError:
             raise HTTPException(404, "no such action") from None
         except ValueError as exc:
@@ -308,13 +373,13 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
         await broadcast(state, {"type": "actions"})
         return action
 
-    @app.post("/api/actions/{action_id}/approve", dependencies=[Depends(auth)])
-    async def approve(action_id: str) -> dict:
-        return await decide(action_id, "approve")
+    @app.post("/api/actions/{action_id}/approve")
+    async def approve(action_id: str, identity: str | None = Depends(auth)) -> dict:
+        return await decide(action_id, "approve", identity or "dashboard")
 
-    @app.post("/api/actions/{action_id}/reject", dependencies=[Depends(auth)])
-    async def reject(action_id: str) -> dict:
-        return await decide(action_id, "reject")
+    @app.post("/api/actions/{action_id}/reject")
+    async def reject(action_id: str, identity: str | None = Depends(auth)) -> dict:
+        return await decide(action_id, "reject", identity or "dashboard")
 
     @app.get("/blocklist.txt", dependencies=[Depends(auth)], response_class=PlainTextResponse)
     async def blocklist() -> str:

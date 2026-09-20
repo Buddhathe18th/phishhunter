@@ -20,6 +20,7 @@ the contents of phishing web pages. The design assumes all of it is hostile.
 | Runaway or malicious autonomy | Unattended actions are off by default; even when on, require score ≥ threshold **and** ≥ 2 independent corroborating signals recomputed from data; third-party actions always need a human; a human rejection permanently blocks auto-action on that domain |
 | XSS in the dashboard | No `innerHTML`; all server strings rendered with `textContent`; CSP forbids inline script/style and external sources |
 | Unauthorised API/WebSocket use | Bearer token (constant-time compare) on every data route; WebSocket auth via first message (never a URL), origin check, client cap |
+| Compromise of one analyst's account | Named accounts are additive on top of the admin token, never a replacement: passwords are hashed with scrypt (N=2^14), tokens are stored only as a SHA-256 hash, and a personal token cannot provision more accounts - only the admin token can |
 | Abuse of the public, token-free `/api/check` | Rate-limited tighter than authenticated routes (no login barrier at all); pure computation over `clean_domain`-validated input, no external calls, no read or write to any store, so there's nothing to exfiltrate or corrupt even under heavy abuse |
 | DNS rebinding / host-header attacks against a local server | `TrustedHostMiddleware` allow-list; binds to loopback by default |
 | Abuse / DoS | Per-client rate limits (stricter for POSTs), body-size caps, chunked uploads refused, bounded queues |
@@ -48,6 +49,8 @@ never sends takedown requests on its own: reports are written to a local outbox 
   article - scores high enough to flag on that signal alone. This is a precision tradeoff, not an oversight:
   it's the actual reason every action requires human approval rather than running unattended.
 - The in-memory demo store has lexical search only; cross-language matching needs the Elastic + Jina path.
+- Personal tokens don't expire or rotate automatically; logging in again issues a new one and silently retires the
+  old one. There's no way to list or revoke a specific user's sessions short of that re-login.
 - Verified against a live Elasticsearch 9.6.0 node and a live Kibana: mappings, real Jina hybrid retrieval (BM25 +
   vector + rerank), ES|QL, actions, Agent Builder tool/agent registration + `converse`, and the `--workflow-id`
   Workflow import (a real investigation takes 30-45s end to end - Agent Builder reasoning over its own tools is

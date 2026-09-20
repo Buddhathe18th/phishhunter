@@ -1,6 +1,7 @@
 """Security primitives: input validation, SSRF guard, auth, rate limiting, response headers."""
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
 import secrets
@@ -10,6 +11,41 @@ from urllib.parse import urlparse
 
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+_USERNAME = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}[a-z0-9]$")
+
+# scrypt parameters: N=2**14 (CPU/memory cost), r=8, p=1 - OWASP's current baseline recommendation for
+# interactive login (not a batch job), using the standard library so no new dependency is needed.
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_DKLEN = 2**14, 8, 1, 32
+
+
+def clean_username(raw: object) -> str | None:
+    """2-32 chars, lowercase letters/digits/hyphen/underscore, must start and end alphanumeric."""
+    if not isinstance(raw, str):
+        return None
+    value = raw.strip().lower()
+    return value if _USERNAME.match(value) else None
+
+
+def hash_password(password: str, salt: bytes | None = None) -> tuple[str, str]:
+    """Returns (salt_hex, hash_hex). Pass the stored salt back in to verify a login attempt."""
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=_SCRYPT_N, r=_SCRYPT_R, p=_SCRYPT_P, dklen=_SCRYPT_DKLEN)
+    return salt.hex(), digest.hex()
+
+
+def verify_password(password: str, salt_hex: str, expected_hash_hex: str) -> bool:
+    try:
+        _, candidate_hex = hash_password(password, bytes.fromhex(salt_hex))
+    except (ValueError, TypeError):
+        return False
+    return secrets.compare_digest(candidate_hex, expected_hash_hex)
+
+
+def hash_token(token: str) -> str:
+    """Tokens are bearer credentials, so only their hash is ever stored - identical treatment to a password,
+    just SHA-256 instead of scrypt, since a token is already high-entropy random data, not a human-chosen secret.
+    """
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def clean_domain(raw: object) -> str | None:

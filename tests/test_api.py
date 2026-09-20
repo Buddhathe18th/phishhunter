@@ -88,11 +88,98 @@ def test_approval_flow_and_blocklist(client):
     inv = client.post("/api/investigate", json={"domain": BAD}, headers=AUTH).json()
     block = next(a for a in inv["actions"] if a["kind"] == "block_domain")
     assert client.get("/blocklist.txt", headers=AUTH).text.strip() == ""
-    assert client.post(f"/api/actions/{block['id']}/approve", headers=AUTH).json()["status"] == "executed"
+    approved = client.post(f"/api/actions/{block['id']}/approve", headers=AUTH).json()
+    assert approved["status"] == "executed"
+    assert approved["history"][-1]["by"] == "dashboard"  # master-token approvals are attributed exactly as before
     assert BAD in client.get("/blocklist.txt", headers=AUTH).text
     assert client.post(f"/api/actions/{block['id']}/approve", headers=AUTH).status_code == 409
     assert client.post("/api/actions/nothex/approve", headers=AUTH).status_code == 422
     assert client.post("/api/actions/" + "0" * 32 + "/approve", headers=AUTH).status_code == 404
+
+
+# --- named accounts: master token stays the admin credential, everything below is additive -------------------
+
+def create_user(client, username="alex", password="a-strong-password-123"):  # noqa: S107 - test fixture, not a real secret
+    r = client.post("/api/users", headers=AUTH, json={"username": username, "password": password})
+    assert r.status_code == 201, r.text
+    return r.json()["token"]
+
+
+def test_master_token_can_create_a_named_account(client):
+    token = create_user(client)
+    assert len(token) > 20
+    # the new personal token works exactly like the master token for normal data access
+    r = client.get("/api/hits", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+
+
+def test_a_users_own_token_cannot_create_more_users(client):
+    user_token = create_user(client)
+    r = client.post("/api/users", headers={"Authorization": f"Bearer {user_token}"},
+                    json={"username": "someone-else", "password": "another-strong-password"})
+    assert r.status_code == 403
+
+
+def test_creating_a_user_needs_a_token_at_all(client):
+    r = client.post("/api/users", json={"username": "nobody", "password": "another-strong-password"})
+    assert r.status_code == 401
+
+
+def test_duplicate_username_is_rejected(client):
+    create_user(client, username="alex")
+    r = client.post("/api/users", headers=AUTH, json={"username": "alex", "password": "yet-another-password"})
+    assert r.status_code == 409
+
+
+def test_invalid_username_is_rejected(client):
+    r = client.post("/api/users", headers=AUTH, json={"username": "a", "password": "a-strong-password-123"})
+    assert r.status_code == 422
+    r = client.post("/api/users", headers=AUTH, json={"username": "-bad-", "password": "a-strong-password-123"})
+    assert r.status_code == 422
+
+
+def test_short_password_is_rejected(client):
+    r = client.post("/api/users", headers=AUTH, json={"username": "alex", "password": "short"})
+    assert r.status_code == 422
+
+
+def test_login_with_correct_password_issues_a_working_token(client):
+    create_user(client, username="alex", password="a-strong-password-123")
+    r = client.post("/api/auth/login", json={"username": "alex", "password": "a-strong-password-123"})
+    assert r.status_code == 200
+    token = r.json()["token"]
+    assert client.get("/api/hits", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+
+def test_login_with_wrong_password_is_rejected(client):
+    create_user(client, username="alex", password="a-strong-password-123")
+    r = client.post("/api/auth/login", json={"username": "alex", "password": "totally-wrong-password"})
+    assert r.status_code == 401
+
+
+def test_login_with_unknown_username_gives_the_same_error_as_wrong_password(client):
+    """Don't leak whether a username exists via a different error message."""
+    r1 = client.post("/api/auth/login", json={"username": "nobody-here", "password": "whatever-password"})
+    create_user(client, username="alex", password="a-strong-password-123")
+    r2 = client.post("/api/auth/login", json={"username": "alex", "password": "wrong-password-here"})
+    assert r1.status_code == r2.status_code == 401
+    assert r1.json()["detail"] == r2.json()["detail"]
+
+
+def test_login_reissues_a_fresh_token_invalidating_the_old_one(client):
+    old_token = create_user(client, username="alex", password="a-strong-password-123")
+    new_token = client.post("/api/auth/login", json={"username": "alex", "password": "a-strong-password-123"}).json()["token"]
+    assert old_token != new_token
+    assert client.get("/api/hits", headers={"Authorization": f"Bearer {old_token}"}).status_code == 401
+    assert client.get("/api/hits", headers={"Authorization": f"Bearer {new_token}"}).status_code == 200
+
+
+def test_approval_by_a_named_account_is_attributed_in_the_audit_trail(client):
+    user_token = create_user(client, username="alex")
+    inv = client.post("/api/investigate", json={"domain": BAD}, headers=AUTH).json()
+    block = next(a for a in inv["actions"] if a["kind"] == "block_domain")
+    approved = client.post(f"/api/actions/{block['id']}/approve", headers={"Authorization": f"Bearer {user_token}"}).json()
+    assert approved["history"][-1]["by"] == "alex"
 
 
 def test_report_endpoint_validates_domain(client):

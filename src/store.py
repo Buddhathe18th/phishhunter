@@ -73,6 +73,13 @@ class Store(ABC):
     def get_action(self, action_id: str) -> dict | None: ...
     @abstractmethod
     def list_actions(self, status: str | None = None, limit: int = 100) -> list[dict]: ...
+    # users
+    @abstractmethod
+    def save_user(self, user: dict) -> None: ...
+    @abstractmethod
+    def get_user(self, username: str) -> dict | None: ...
+    @abstractmethod
+    def find_user_by_token_hash(self, token_hash: str) -> dict | None: ...
 
     def new_action_id(self) -> str:
         return uuid.uuid4().hex
@@ -85,6 +92,7 @@ class MemoryStore(Store):
         self.hits: dict[str, dict] = {}
         self.evidence: dict[str, dict] = {}
         self.actions: dict[str, dict] = {}
+        self.users: dict[str, dict] = {}
 
     def upsert_hit(self, domain: str, doc: dict) -> None:
         self.hits[domain] = {**self.hits.get(domain, {}), **doc}
@@ -153,6 +161,15 @@ class MemoryStore(Store):
     def list_actions(self, status: str | None = None, limit: int = 100) -> list[dict]:
         rows = [a for a in self.actions.values() if status is None or a["status"] == status]
         return sorted(rows, key=lambda a: a.get("created", ""), reverse=True)[:limit]
+
+    def save_user(self, user: dict) -> None:
+        self.users[user["username"]] = user
+
+    def get_user(self, username: str) -> dict | None:
+        return self.users.get(username)
+
+    def find_user_by_token_hash(self, token_hash: str) -> dict | None:
+        return next((u for u in self.users.values() if u.get("token_hash") == token_hash), None)
 
 
 def _esql_rows(resp: Any) -> list[dict]:
@@ -225,6 +242,18 @@ class ElasticStore(Store):
         resp = self.es.search(index=esq.ACTIONS_INDEX, size=limit, sort=[{"created": "desc"}], query=query)
         return [{"id": h["_id"], **h["_source"]} for h in resp["hits"]["hits"]]
 
+    def save_user(self, user: dict) -> None:
+        self.es.index(index=esq.USERS_INDEX, id=user["username"], document=user, refresh="wait_for")
+
+    def get_user(self, username: str) -> dict | None:
+        resp = self.es.options(ignore_status=404).get(index=esq.USERS_INDEX, id=username).body
+        return resp["_source"] if resp.get("found") else None
+
+    def find_user_by_token_hash(self, token_hash: str) -> dict | None:
+        resp = self.es.search(index=esq.USERS_INDEX, size=1, query={"term": {"token_hash": token_hash}})
+        hits = resp["hits"]["hits"]
+        return hits[0]["_source"] if hits else None
+
 
 def clean_evidence(doc: dict) -> dict:
     """Normalise an incoming evidence doc: strip control chars, cap lengths, drop unknown keys."""
@@ -262,6 +291,7 @@ def ensure_indices(store: ElasticStore) -> list[str]:
         esq.HITS_INDEX: esq.hits_index_body(),
         esq.EVIDENCE_INDEX: esq.evidence_index_body(store.settings.embed_inference_id if store.semantic else None),
         esq.ACTIONS_INDEX: esq.actions_index_body(),
+        esq.USERS_INDEX: esq.users_index_body(),
     }
     created = []
     for name, body in wanted.items():

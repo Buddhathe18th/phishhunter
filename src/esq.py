@@ -8,6 +8,7 @@ from __future__ import annotations
 HITS_INDEX = "phish-hits"
 EVIDENCE_INDEX = "phish-evidence"
 ACTIONS_INDEX = "phish-actions"
+USERS_INDEX = "phish-users"
 
 EVIDENCE_TYPES = ("lure_email", "lure_sms", "page_text", "forum_post", "feed_report")
 EVIDENCE_SOURCE_FIELDS = ["text", "language", "type", "brand", "source", "domains", "@timestamp"]
@@ -81,6 +82,23 @@ def actions_index_body() -> dict:
                 "updated": {"type": "date"},
                 "policy": {"type": "object", "enabled": False},
                 "history": {"type": "object", "enabled": False},
+            },
+        }
+    }
+
+
+def users_index_body() -> dict:
+    """One doc per named account. Only hashes are ever stored - never a raw password or a raw bearer token."""
+    return {
+        "mappings": {
+            "dynamic": "strict",
+            "properties": {
+                "username": {"type": "keyword"},
+                "password_salt": {"type": "keyword", "index": False},
+                "password_hash": {"type": "keyword", "index": False},
+                "token_hash": {"type": "keyword"},
+                "created_at": {"type": "date"},
+                "created_by": {"type": "keyword"},
             },
         }
     }
