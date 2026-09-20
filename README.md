@@ -10,7 +10,7 @@ action sitting behind a policy gate that a human still has to approve. Built at 
 It's defensive only. Everything it reads is public, and everything it produces is a report a person reviews. It
 won't touch a third-party site unless you turn on the hardened page fetch, and it never files a takedown by itself.
 
-## Why watch certificates
+## Why we built it
 
 A fake login page needs a valid SSL certificate before a browser will show the padlock and let anyone trust it
 enough to type a password in. Every certificate authority is required to publish every certificate it issues to a
@@ -64,30 +64,14 @@ All of that lives behind the analyst dashboard's login. `/check` is a separate, 
 at all: paste a domain and get an instant answer from the same scorer, no side effects, safe to leave open to
 anyone.
 
-## What Elasticsearch is actually doing here
-
-| Need | Elastic feature |
-|---|---|
-| Messy multilingual text (lure emails/SMS, scraped page text, forum and feed reports) | `phish-evidence` index with a BM25 `text` field and a Jina `semantic_text` field |
-| Finding the same lure worded differently, or in another language | Hybrid retrieval: BM25 + Jina dense vectors fused with RRF, then a Jina reranker (`text_similarity_reranker`) |
-| Typosquats and homoglyph neighbours of a domain | `label.ngram` custom analyzer + fuzzy query on `phish-hits` |
-| Campaign structure and issuance bursts | ES\|QL aggregations by brand / issuer / TLD and `BUCKET()` time series |
-| A reasoning agent with tools | Agent Builder: 5 ES\|QL tools + platform search + a workflow tool, registered by `setup_elastic` |
-| Closing the loop | Workflows: `propose_action` writes to the audit index; a policy gate decides what actually runs |
-| Keeping a record | `phish-actions` index logs every proposal, decision, and who made it |
-
-The LLM agent can only propose an action; a deterministic policy gate decides what actually runs, never the model.
-If Agent Builder isn't available, the write-up falls back to a grounded Gemini call over evidence already gathered
-- either way it's narrative only, and the dashboard credits whichever one answered.
-
-## Quick start (no cluster needed)
+## Running it 
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env            # then set API_TOKEN (see below) and DEMO=1
-pytest                            # 100+ tests
+copy .env.example .env            # set API_TOKEN and DEMO=1
+pytest     
 uvicorn src.api:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
@@ -100,9 +84,8 @@ keys needed at all, this is the fastest way to see the whole thing running.
 
 ## Named accounts
 
-`API_TOKEN` is the admin credential, basically a root password: one person sets it up, then uses it once to
-create everyone else's account, never for day-to-day logins. Keep it out of individual analysts' hands. Instead,
-mint each person their own login:
+`API_TOKEN` is the admin credential. One person can set it up, then use it once to
+create everyone else's account. Then mint each person their own login:
 
 ```
 curl -X POST /api/users -H "Authorization: Bearer $API_TOKEN" \
@@ -116,9 +99,24 @@ except provision more accounts, and every approve/reject in the audit trail is n
 username instead of a generic "dashboard" label. Passwords are hashed with scrypt, tokens are stored only as a
 SHA-256 hash, and there's no token expiry or rotation yet, log in again to rotate.
 
+## Elastic Search implementation
+
+| Need | Elastic feature |
+|---|---|
+| Messy multilingual text (lure emails/SMS, scraped page text, forum and feed reports) | `phish-evidence` index with a BM25 `text` field and a Jina `semantic_text` field |
+| Finding the same lure worded differently, or in another language | Hybrid retrieval: BM25 + Jina dense vectors fused with RRF, then a Jina reranker (`text_similarity_reranker`) |
+| Typosquats and homoglyph neighbours of a domain | `label.ngram` custom analyzer + fuzzy query on `phish-hits` |
+| Campaign structure and issuance bursts | ES\|QL aggregations by brand / issuer / TLD and `BUCKET()` time series |
+| A reasoning agent with tools | Agent Builder: 5 ES\|QL tools + platform search + a workflow tool, registered by `setup_elastic` |
+| Closing the loop | Workflows: `propose_action` writes to the audit index; a policy gate decides what actually runs |
+| Keeping a record | `phish-actions` index logs every proposal, decision, and who made it |
+
+The agent can propose an action, but deterministic policy gate decides what actually runs. 
+If Agent Builder isn't available, the write-up falls back to a Gemini call and the dashboard credits whichever one answered.
+
 ## With Elasticsearch
 
-Everything above works with nothing but Python (see Quick start). This section's only needed if you want the real
+Everything above works with nothing but Python (see Quick start). This section's if you want the real
 Elasticsearch-backed search instead of the in-memory demo store.
 
 1. Create an Elastic Cloud/serverless deployment + API key (least-privilege for the app; admin for setup).
@@ -132,10 +130,9 @@ Elasticsearch-backed search instead of the in-memory demo store.
 No `JINA_API_KEY`? Everything still works with BM25-only (keyword) retrieval, just without the semantic half of
 the hybrid search above.
 
-## Autonomy and safety
+## Safety
 
-By default Doppel investigates automatically but never acts automatically, a person always approves the action.
-These settings control how much of that you turn on:
+By default Doppel investigates but never acts automatically, a person always approves the action. These settings control how much of that you turn on:
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -144,11 +141,11 @@ These settings control how much of that you turn on:
 | `AUTO_ACTIONS` | off | Let policy run `block_domain` / `notify` unattended (needs score ≥ `AUTO_SCORE` and ≥ 2 corroborating signals) |
 
 `file_report` (anything addressed to a third party) always waits for a person, and even then only writes a report
-to `outbox/` for you to submit, it never contacts anyone on Doppel's behalf. Approve or reject pending actions in
+to `outbox/` for you to submit. Approve or reject pending actions in
 the dashboard. `GET /blocklist.txt` (token required) serves the domains blocked by executed actions as plain text
-you could feed into a firewall or DNS sinkhole. Full threat model in [SECURITY.md](SECURITY.md).
+you could feed into a firewall or DNS sinkhole. 
 
-## Layout
+## This repo 
 
 | Path | Purpose |
 |---|---|
