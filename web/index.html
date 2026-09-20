@@ -18,11 +18,21 @@
 </header>
 
 <form id="login" hidden>
-  <p>Enter the API token (the <code>API_TOKEN</code> from your .env, or the one printed at server start).</p>
-  <input id="token" type="password" autocomplete="off" required aria-label="API token">
+  <div class="login-tabs">
+    <button type="button" id="tab-login" class="tab">Log in</button>
+    <button type="button" id="tab-token" class="tab">Use a token</button>
+  </div>
+  <div id="login-fields">
+    <input id="username" type="text" autocomplete="username" placeholder="Username" aria-label="Username">
+    <input id="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password">
+  </div>
+  <div id="token-fields" hidden>
+    <p>Enter the API token (the <code>API_TOKEN</code> from your .env, or the one printed at server start).</p>
+    <input id="token" type="password" autocomplete="off" aria-label="API token">
+  </div>
   <button type="submit">Connect</button>
   <p id="login-error" class="err"></p>
-  <p class="dim small">No token? You can still <a href="/check">check a suspicious link</a> without one.</p>
+  <p class="dim small">No account or token? You can still <a href="/check">check a suspicious link</a> without one.</p>
 </form>
 
 <div id="app" class="cols" hidden>

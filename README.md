@@ -51,7 +51,8 @@ pytest                            # 100+ tests
 uvicorn src.api:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000 and paste your `API_TOKEN`. Generate one with
+Open http://127.0.0.1:8000. The dashboard's login form takes a username and password directly (see Named accounts
+below); "Use a token" is still there for the admin `API_TOKEN` itself. Generate one with
 `python -c "import secrets; print(secrets.token_urlsafe(32))"`; if you leave it unset, one is generated and printed
 when the server starts. Demo mode replays canned domains and uses an in-memory store with the bundled synthetic
 lure corpus (`data/lures.jsonl`), so investigations work offline (lexical search only).

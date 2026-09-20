@@ -178,10 +178,43 @@ async function start() {
 $("simulate").addEventListener("click", () => simulate(false));
 $("simulate-live").addEventListener("click", () => simulate(true));
 
-$("login").addEventListener("submit", e => {
+let loginMode = "login";
+function setLoginMode(mode) {
+  loginMode = mode;
+  $("tab-login").classList.toggle("active", mode === "login");
+  $("tab-token").classList.toggle("active", mode === "token");
+  $("login-fields").hidden = mode !== "login";
+  $("token-fields").hidden = mode !== "token";
+}
+$("tab-login").addEventListener("click", () => setLoginMode("login"));
+$("tab-token").addEventListener("click", () => setLoginMode("token"));
+setLoginMode("login");
+
+async function tradeLoginForToken(username, password) {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || "login failed");
+  return body.token;
+}
+
+$("login").addEventListener("submit", async e => {
   e.preventDefault();
-  token = $("token").value.trim(); $("token").value = "";
-  tokenStore.set(token);
-  start();
+  $("login-error").textContent = "";
+  try {
+    if (loginMode === "token") {
+      token = $("token").value.trim(); $("token").value = "";
+    } else {
+      token = await tradeLoginForToken($("username").value.trim(), $("password").value);
+      $("password").value = "";
+    }
+    tokenStore.set(token);
+    start();
+  } catch (err) {
+    $("login-error").textContent = err.message;
+  }
 });
 if (token) start(); else $("login").hidden = false;
