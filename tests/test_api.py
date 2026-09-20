@@ -108,6 +108,31 @@ def test_simulate_flags_a_fresh_attack_in_demo_mode(client):
     assert client.get("/api/hits", headers=AUTH).json()["stats"]["flagged"] >= 1
 
 
+def test_simulate_live_uses_a_real_fetched_domain(client, monkeypatch):
+    from src.ingest import CertEvent
+
+    async def fake_fetch(client=None):
+        return CertEvent("real-phish.example.com", "OpenPhish live feed")
+
+    monkeypatch.setattr("src.api.fetch_live_attack_candidate", fake_fetch)
+    r = client.post("/api/simulate?live=true", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["domain"] == "real-phish.example.com" and body["source"] == "live"
+
+
+def test_simulate_live_falls_back_to_synthetic_when_feed_has_no_match(client, monkeypatch):
+    async def fake_fetch(client=None):
+        return None
+
+    monkeypatch.setattr("src.api.fetch_live_attack_candidate", fake_fetch)
+    r = client.post("/api/simulate?live=true", headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["flagged"] is True
+    assert "synthetic" in body["source"]
+
+
 def test_simulate_refused_outside_demo_mode(settings, store):
     from dataclasses import replace
     app = create_app(replace(settings, demo=False), store, start_pipeline=False)

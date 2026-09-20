@@ -37,13 +37,21 @@ function logout() {
   $("app").hidden = true; $("login").hidden = false; $("conn").textContent = "not connected";
 }
 
+let pendingSimulateDomain = null;
+
 function renderHit(d, prepend = true) {
-  const el = h("div", { class: "hit" + (d.score >= 70 ? " high" : ""), on: { click: () => investigate(d.domain) } },
+  const justSimulated = d.domain === pendingSimulateDomain;
+  const el = h("div", { class: "hit" + (d.score >= 70 ? " high" : "") + (justSimulated ? " simulated" : ""),
+                        on: { click: () => investigate(d.domain) } },
     h("div", { class: "top" }, h("span", { class: "domain" }, d.domain), h("span", { class: "score" }, d.score + "/100")),
     h("ul", { class: "reasons" }, (d.reasons || []).map(r => h("li", {}, r))));
   const feed = $("feed");
   if (prepend) feed.prepend(el); else feed.append(el);
   while (feed.children.length > 60) feed.lastChild.remove();
+  if (justSimulated) {
+    pendingSimulateDomain = null;
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 const AGENT_LABEL = { agent_builder: "Agent Builder analyst", gemini: "Gemini analyst" };
@@ -139,16 +147,18 @@ function connect() {
   };
 }
 
-async function simulate() {
-  const btn = $("simulate");
-  btn.disabled = true; btn.textContent = "Simulating...";
+async function simulate(live) {
+  const btn = $(live ? "simulate-live" : "simulate");
+  const label = live ? "Simulate a live attack" : "Simulate an attack";
+  btn.disabled = true; btn.textContent = live ? "Fetching a real attack..." : "Simulating...";
   try {
-    const { domain } = await (await api("/api/simulate", { method: "POST" })).json();
-    btn.textContent = `Simulated ${domain}`;
+    const { domain, source } = await (await api(`/api/simulate?live=${live}`, { method: "POST" })).json();
+    pendingSimulateDomain = domain;
+    btn.textContent = live ? `Pulled ${domain} (${source})` : `Simulated ${domain}`;
   } catch (e) {
-    btn.textContent = e.message.toLowerCase().includes("demo") ? "Only available in demo mode" : "Simulate an attack";
+    btn.textContent = e.message.toLowerCase().includes("demo") ? "Only available in demo mode" : label;
   } finally {
-    setTimeout(() => { btn.disabled = false; btn.textContent = "Simulate an attack"; }, 2500);
+    setTimeout(() => { btn.disabled = false; btn.textContent = label; }, 4000);
   }
 }
 
@@ -157,13 +167,14 @@ async function start() {
     const d = await (await api("/api/hits")).json();
     stats(d.stats);
     d.hits.reverse().forEach(x => renderHit(x, true));
-    $("login").hidden = true; $("app").hidden = false; $("simulate").hidden = false;
+    $("login").hidden = true; $("app").hidden = false; $("simulate").hidden = false; $("simulate-live").hidden = false;
     connect(); loadActions(); loadVolume(); loadCampaigns(); loadBenchmark();
     setInterval(loadVolume, 60000); setInterval(loadCampaigns, 60000);
   } catch { $("login-error").textContent = "Token rejected or server unreachable."; $("login").hidden = false; }
 }
 
-$("simulate").addEventListener("click", simulate);
+$("simulate").addEventListener("click", () => simulate(false));
+$("simulate-live").addEventListener("click", () => simulate(true));
 
 $("login").addEventListener("submit", e => {
   e.preventDefault();

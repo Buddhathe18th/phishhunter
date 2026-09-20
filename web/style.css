@@ -3,6 +3,7 @@
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
 header { padding:16px 20px; display:flex; flex-wrap:wrap; gap:8px 24px; align-items:baseline; border-bottom:1px solid #232a34; }
 #simulate { margin-left:auto; }
+#simulate-live { background:#2f7d55; }
 h1 { margin:0; font:600 18px ui-monospace, Consolas, monospace; text-wrap:balance; }
 h2 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:18px 0 8px; text-wrap:balance; }
 h2 small { text-transform:none; letter-spacing:0; font-weight:400; margin-left:6px; }
@@ -19,7 +20,9 @@ button.danger { background:#9b2c2c; }
 .hit, .panel, .action { background:var(--panel); border-radius:8px; padding:12px 14px; border-left:4px solid var(--mid); }
 .panel { border-left-color:#2b3340; }
 .hit { cursor:pointer; animation:in .25s ease; } .hit.high { border-left-color:var(--hi); } .hit:hover { background:#1d232c; }
-@media (prefers-reduced-motion: reduce) { .hit { animation:none; } }
+.hit.simulated { animation: in .25s ease, pulse 1.6s ease-out 2; }
+@media (prefers-reduced-motion: reduce) { .hit, .hit.simulated { animation:none; } }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 40% { box-shadow: 0 0 0 3px var(--link); } }
 .top { display:flex; justify-content:space-between; gap:12px; }
 .domain { font:600 15px ui-monospace, Consolas, monospace; word-break:break-all; }
 .score { font:700 15px ui-monospace, Consolas, monospace; font-variant-numeric:tabular-nums; }

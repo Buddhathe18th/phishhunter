@@ -6,12 +6,16 @@ import json
 import random
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
+import httpx
 import websockets
 
+from .score import score_domain
 from .security import clean_text
 
 CERTSTREAM_URL = "wss://certstream.calidog.io"
+OPENPHISH_FEED_URL = "https://openphish.com/feed.txt"
 
 DEMO_DOMAINS = [
     "paypa1-secure-login.xyz", "rnicrosoft-support.top", "login.paypal.com.account-verify.click",
@@ -35,6 +39,34 @@ SIMULATED_ATTACKS = [
 class CertEvent:
     domain: str
     issuer: str | None = None
+
+
+async def fetch_live_attack_candidate(client: httpx.AsyncClient | None = None) -> CertEvent | None:
+    """Pulls a real, currently-active phishing URL from OpenPhish's public feed and returns one that targets
+    one of our configured brands, so /api/simulate can run an actual live attack through the pipeline instead
+    of only a canned demo string. Returns None on any failure (feed down, no match) - the caller falls back
+    to the synthetic pool, since a live external fetch has no place failing a demo outright.
+    """
+    owns_client = client is None
+    client = client or httpx.AsyncClient(follow_redirects=True, trust_env=False)
+    try:
+        resp = await client.get(OPENPHISH_FEED_URL, timeout=8.0)
+        resp.raise_for_status()
+        hosts, seen = [], set()
+        for line in resp.text.splitlines():
+            host = urlparse(line.strip()).hostname
+            if host and host.lower() not in seen:
+                seen.add(host.lower())
+                hosts.append(host.lower())
+        in_scope = [h for h in hosts if score_domain(h).brand]
+        if not in_scope:
+            return None
+        return CertEvent(random.choice(in_scope), "OpenPhish live feed")  # noqa: S311 - not a security decision
+    except Exception:
+        return None
+    finally:
+        if owns_client:
+            await client.aclose()
 
 
 async def certstream_events() -> AsyncIterator[CertEvent]:

@@ -25,7 +25,7 @@ from scripts.benchmark import run_benchmark
 
 from .actions import ActionEngine
 from .config import Settings, load
-from .ingest import SIMULATED_ATTACKS, certstream_events, demo_events
+from .ingest import SIMULATED_ATTACKS, CertEvent, certstream_events, demo_events, fetch_live_attack_candidate
 from .investigate import Investigation, Investigator
 from .kibana import Kibana
 from .score import BRANDS, score_domain
@@ -243,15 +243,23 @@ def create_app(settings: Settings | None = None, store: Store | None = None, sta
         return payload
 
     @app.post("/api/simulate", dependencies=[Depends(auth)])
-    async def simulate() -> dict:
-        """Demo-mode only: inject one fresh synthetic attack right now, so the whole pipeline (score, flag,
-        investigate, propose) reacts live instead of waiting on the passive replay's own timing.
+    async def simulate(live: bool = False) -> dict:
+        """Demo-mode only: inject one fresh attack right now, so the whole pipeline (score, flag, investigate,
+        propose) reacts live instead of waiting on the passive replay's own timing. `live=true` pulls a real,
+        currently-active phishing URL from OpenPhish's public feed instead of a canned demo string; if that
+        fetch fails or finds nothing in scope, it falls back to the synthetic pool rather than erroring out.
         """
         if not settings.demo:
             raise HTTPException(400, "only available in DEMO=1 mode - it would be misleading against a live stream")
-        domain = random.choice(SIMULATED_ATTACKS)  # noqa: S311 - picking a demo fixture, not a security decision
-        flagged = await handle_event(state, domain, random.choice(["Let's Encrypt", "ZeroSSL"]))  # noqa: S311
-        return {"domain": domain, "flagged": flagged}
+        source = "synthetic"
+        event = None
+        if live:
+            event = await fetch_live_attack_candidate()
+            source = "live" if event else "synthetic (live feed had no in-scope match)"
+        if event is None:
+            event = CertEvent(random.choice(SIMULATED_ATTACKS), random.choice(["Let's Encrypt", "ZeroSSL"]))  # noqa: S311
+        flagged = await handle_event(state, event.domain, event.issuer)
+        return {"domain": event.domain, "flagged": flagged, "source": source}
 
     @app.post("/api/evidence", dependencies=[Depends(auth)], status_code=201)
     async def add_evidence(req: EvidenceReq) -> dict:
