@@ -130,6 +130,8 @@ async function loadBenchmark() {
       h("span", {}, `${r.recall_pct}% recall`, h("span", { class: "dim" }, ` on ${r.in_scope} in-scope phishing URLs`)),
       h("span", { class: r.false_positives ? "score" : "dim" }, `${r.false_positives}/${r.known_good_tested} false positives`)),
     h("div", { class: "dim" }, `snapshot: ${r.snapshot}, ${r.total_urls} live URLs, ${r.configured_brands} configured brands`),
+    r.false_positive_examples.length ? h("div", { class: "chips" },
+      r.false_positive_examples.map(d => h("span", { class: "chip", title: "flagged, but actually legitimate" }, d))) : null,
   );
 }
 
