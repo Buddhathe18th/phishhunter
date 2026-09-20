@@ -1,9 +1,11 @@
 # Doppel
 
-Watches the public Certificate Transparency stream for newly issued certificates and flags the ones that look
-like they're impersonating a known brand. For anything flagged, it pulls up similar lures in any language, groups
-related domains into a campaign, checks the live page, and writes up a verdict with a proposed action sitting
-behind a policy gate. Built at Hack the North 2026.
+Automates the part of a SOC analyst's job that happens before anyone makes a decision: noticing a phishing
+domain exists, pulling together the evidence (how old is it, has this lure shown up before, does the page have a
+login form), and writing up a verdict, so a person reviews a finished case instead of starting from a bare domain
+name. It finds those domains by watching the public Certificate Transparency stream for newly issued certificates
+that look like they're impersonating a known brand, then groups related domains into a campaign and proposes an
+action sitting behind a policy gate that a human still has to approve. Built at Hack the North 2026.
 
 It's defensive only. Everything it reads is public, and everything it produces is a report a person reviews. It
 won't touch a third-party site unless you turn on the hardened page fetch, and it never files a takedown by itself.
@@ -31,9 +33,12 @@ every point the score gets comes with a reason attached rather than a bare numbe
 Anything that clears the threshold gets investigated properly, which is the expensive part and only runs on
 domains that already look worth the effort. That means an RDAP lookup for how old the domain actually is (a
 domain registered five minutes ago is a lot more suspicious than one that's ten years old), and a search over
-stored evidence, real lure emails, scraped page text, forum posts, past reports, using both a keyword search
-(BM25) and a semantic search over embeddings from Jina, merged together and reranked, so a lure worded completely
-differently, or written in another language, still turns up. Optionally, off by default, it also does one tightly
+whatever evidence has been captured so far, lure emails, scraped page text, forum posts, past reports, using both
+a keyword search (BM25) and a semantic search over embeddings from Jina, merged together and reranked, so a lure
+worded completely differently, or written in another language, still turns up. That evidence index starts out
+empty and grows from whatever a real deployment actually captures; the repo ships a small (23-example, six
+language) synthetic seed corpus purely to prove the cross-language matching works before any real evidence exists,
+not as a dataset meant to carry any real weight on its own. Optionally, off by default, it also does one tightly
 restricted fetch of the live page to check for a password field, the one place Doppel touches the outside world
 beyond reading public logs.
 
