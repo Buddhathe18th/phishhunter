@@ -14,6 +14,7 @@
   <span class="stat" id="conn">not connected</span>
   <button id="simulate" type="button" hidden>Simulate an attack</button>
   <button id="simulate-live" type="button" hidden>Simulate a live attack</button>
+  <a href="/check">Check a suspicious link</a>
 </header>
 
 <form id="login" hidden>
@@ -21,6 +22,7 @@
   <input id="token" type="password" autocomplete="off" required aria-label="API token">
   <button type="submit">Connect</button>
   <p id="login-error" class="err"></p>
+  <p class="dim small">No token? You can still <a href="/check">check a suspicious link</a> without one.</p>
 </form>
 
 <div id="app" class="cols" hidden>
