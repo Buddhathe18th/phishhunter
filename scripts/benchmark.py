@@ -4,7 +4,7 @@
 
 Two checks:
 1. Recall: of live phishing URLs (from OpenPhish's public community feed, a frozen snapshot in
-   data/openphish_sample_2026-09-19.txt) that target one of our configured brands, how many do we flag?
+   data/openphish_sample_2026-09-20.txt) that target one of our configured brands, how many do we flag?
    Most of the feed targets brands we haven't configured - that's expected, this is a brand-protection
    tool that only watches for the brands it's told to, not a general-purpose phishing detector. Recall is
    only meaningful on the subset that's actually in scope for us.
@@ -23,7 +23,7 @@ from urllib.parse import urlparse
 
 from src.score import BRANDS, score_domain
 
-DATA = Path(__file__).resolve().parent.parent / "data" / "openphish_sample_2026-09-19.txt"
+DATA = Path(__file__).resolve().parent.parent / "data" / "openphish_sample_2026-09-20.txt"
 
 # Known-legitimate domains, including a few that share surface features with phishing (hyphens, a brand
 # name used in an unofficial-but-legitimate way) without actually impersonating a login flow.
