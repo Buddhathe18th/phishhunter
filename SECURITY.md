@@ -49,14 +49,14 @@ never sends takedown requests on its own: reports are written to a local outbox 
   it's the actual reason every action requires human approval rather than running unattended.
 - The in-memory demo store has lexical search only; cross-language matching needs the Elastic + Jina path.
 - Verified against a live Elasticsearch 9.6.0 node and a live Kibana: mappings, real Jina hybrid retrieval (BM25 +
-  vector + rerank), ES|QL, actions, and Agent Builder tool/agent registration + `converse` (a real investigation
-  takes 30-45s end to end - Agent Builder reasoning over its own tools is not instant, and the dashboard reflects
-  it asynchronously rather than blocking the request that flagged the domain). Elastic's trial LLM connector
-  returns HTTP 429 well before a fast demo loop would naturally space calls out on its own, so `converse` is
-  rate-limited to one call per 60 seconds application-wide; when it's skipped or fails, the Gemini fallback still
-  runs. The workflow-tool registration (`--workflow-id`) still follows an undocumented shape and hasn't been
-  exercised live; it fails closed either way (the app degrades to the deterministic playbook) and reports the
-  error clearly.
+  vector + rerank), ES|QL, actions, Agent Builder tool/agent registration + `converse`, and the `--workflow-id`
+  Workflow import (a real investigation takes 30-45s end to end - Agent Builder reasoning over its own tools is
+  not instant, and the dashboard reflects it asynchronously rather than blocking the request that flagged the
+  domain). Elastic's trial LLM connector returns HTTP 429 well before a fast demo loop would naturally space
+  calls out on its own, so `converse` is rate-limited to one call per 60 seconds application-wide; when it's
+  skipped or fails, the Gemini fallback still runs. `setup_elastic` is documented as idempotent; testing that
+  claim live found Kibana returns a plain HTTP 400 for an already-existing tool instead of the 409 we assumed,
+  which meant re-running it wasn't actually idempotent - fixed, and now covered by a regression test.
 - The Gemini fallback analyst (`GEMINI_API_KEY`, used only when Agent Builder is unset or errors) is a single
   grounded completion over evidence already gathered, not a tool-calling loop. Verified against the real Gemini
   API; rate-limited to one call per 15 seconds application-wide so a fast demo loop doesn't burn through a free

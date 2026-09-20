@@ -26,10 +26,16 @@ class Kibana:
         return self.client.request(method, f"{self.base}{path}", json=body, timeout=timeout)
 
     def upsert(self, kind: str, definition: dict) -> str:
-        """Create a tool ('tools') or agent ('agents'); on conflict, update in place. Returns 'created'/'updated'."""
+        """Create a tool ('tools') or agent ('agents'); on conflict, update in place. Returns 'created'/'updated'.
+
+        Kibana isn't consistent about the conflict status code: agents return 409, but tools return a plain 400
+        with "already exists" in the message. Checking the message text, not just the status code, is what
+        actually makes re-running this idempotent as documented.
+        """
         path = f"/api/agent_builder/{kind}"
         resp = self._call("POST", path, definition)
-        if resp.status_code == 409:
+        is_conflict = resp.status_code == 409 or (resp.status_code == 400 and "already exists" in resp.text.lower())
+        if is_conflict:
             body = {k: v for k, v in definition.items() if k not in {"id", "type"}}
             resp = self._call("PUT", f"{path}/{definition['id']}", body)
             action = "updated"
