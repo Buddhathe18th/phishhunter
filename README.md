@@ -159,26 +159,6 @@ to `outbox/` for you to submit, it never contacts anyone on Doppel's behalf. App
 the dashboard. `GET /blocklist.txt` (token required) serves the domains blocked by executed actions, in a plain
 text format you could feed into a firewall or DNS sinkhole. Full threat model in [SECURITY.md](SECURITY.md).
 
-## Measured accuracy, not just a demo
-
-It's easy to make a phishing detector look good on a handful of hand-picked examples. To check whether Doppel
-actually works, `python -m scripts.benchmark` scores a frozen snapshot of OpenPhish's live feed (real,
-already-confirmed phishing domains) plus a set of known-legitimate domains as a spot-check. `tests/test_benchmark.py`
-locks the results in as a permanent regression bound, so a future change that quietly makes scoring worse fails CI.
-Last run: **100% recall** on in-scope phishing URLs (it caught all of them), **2 out of 21 false positives** on
-known-good domains, both from legitimate pages that merely mention a brand by name. That's exactly why every
-action requires a human to approve it instead of the policy running unattended: the scorer is good, not perfect,
-and the two false positives prove it. Full writeup and the bug this found: [SECURITY.md](SECURITY.md#known-limitations).
-
-## Optional integrations
-
-Both are no-ops until you set the key; nothing else changes if you skip them.
-
-| Variable | Enables |
-|---|---|
-| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-flash-lite-latest`) | Analyst write-up fallback when Kibana Agent Builder isn't configured or fails |
-| `SENTRY_DSN` | Exception capture and light performance tracing for the pipeline, investigator and API (`send_default_pii=False`) |
-
 ## Layout
 
 | Path | Purpose |
@@ -196,7 +176,7 @@ Both are no-ops until you set the key; nothing else changes if you skip them.
 | `elastic/workflows/` | Elastic Workflow definitions |
 | `web/index.html`, `web/app.js` | Analyst dashboard, login-gated (no inline script/style, strict CSP) |
 | `web/check.html`, `web/check.js` | Public `/check` page, no login needed |
-| `scripts/benchmark.py` | Accuracy check against a frozen real-world sample (see Measured accuracy above) |
+| `scripts/benchmark.py` | Accuracy check against a frozen real-world sample of confirmed phishing and known-legitimate domains |
 
 If you're new to the codebase, `src/score.py` and `src/investigate.py` are the best place to start reading: the
 first is the whole scoring logic in plain, well-commented Python with no external dependencies, and the second is
@@ -239,13 +219,6 @@ A few terms this README leans on, in case they're new:
   the attacker chose, often an internal address it shouldn't be able to reach. Relevant here because the optional
   page-fetch feature makes a live HTTP request to an attacker-controlled domain, see [SECURITY.md](SECURITY.md)
   for how that's locked down.
-
-## Status
-
-Everything in this project is verified against the real thing, not a stand-in: Elasticsearch 9.6.0, real Jina
-hybrid retrieval (BM25 + vector + rerank), the real Kibana Agent Builder (`converse`, using its own registered
-tools), the real Gemini API, and real Sentry event capture. Known limitations:
-[SECURITY.md](SECURITY.md#known-limitations).
 
 ## License
 
